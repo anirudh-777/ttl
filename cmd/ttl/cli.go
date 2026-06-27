@@ -1,0 +1,624 @@
+// ttl — command-line interface to a ttl server.
+//
+// The CLI is a thin client: every command is one HTTP call. State
+// (server URL, API key) lives in the local config file.
+package main
+
+import (
+	"bufio"
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"strings"
+	"time"
+
+	"github.com/charmbracelet/x/term"
+	"github.com/spf13/cobra"
+
+	"github.com/anirudhprakash/ttl/internal/client"
+	"github.com/anirudhprakash/ttl/internal/config"
+	"github.com/anirudhprakash/ttl/internal/fmtcmd"
+)
+
+var (
+	flagFormat string
+	flagServer string
+)
+
+// rootCmd is the entrypoint used when no subcommand is given.
+var rootCmd = &cobra.Command{
+	Use:           "ttl",
+	Short:         "ttl — terminal task tracker (CLI, TUI, server)",
+	SilenceUsage:  true,
+	SilenceErrors: true,
+}
+
+// cliCmd is used when invoked as `ttl ...` from the terminal. It
+// dispatches to either the interactive TUI or the explicit subcommands.
+var cliCmd = &cobra.Command{
+	Use:   "cli",
+	Short: "Run a CLI command against the configured server",
+}
+
+// addCmd creates a new task.
+var addCmd = &cobra.Command{
+	Use:   "add <title>",
+	Short: "Add a new task",
+	Args:  cobra.MinimumNArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		c := mustClient()
+		title := strings.Join(args, " ")
+		priority, _ := cmd.Flags().GetInt("priority")
+		projectName, _ := cmd.Flags().GetString("project")
+		tagList, _ := cmd.Flags().GetStringSlice("tag")
+		dueStr, _ := cmd.Flags().GetString("due")
+		notes, _ := cmd.Flags().GetString("notes")
+
+		var projectID string
+		if projectName != "" {
+			projects, err := c.ListProjects(context.Background())
+			if err != nil {
+				return err
+			}
+			for _, p := range projects {
+				if strings.EqualFold(p.Name, projectName) {
+					projectID = p.ID
+					break
+				}
+			}
+			if projectID == "" {
+				// Create on demand.
+				p, err := c.CreateProject(context.Background(), projectName, "")
+				if err != nil {
+					return err
+				}
+				projectID = p.ID
+			}
+		}
+
+		var due *time.Time
+		if dueStr != "" {
+			t, err := parseDue(dueStr)
+			if err != nil {
+				return err
+			}
+			due = &t
+		}
+
+		created, err := c.CreateTask(context.Background(), client.CreateTaskOpts{
+			Title: title, Notes: notes, Priority: priority,
+			ProjectID: projectID, DueAt: due, Tags: tagList,
+		})
+		if err != nil {
+			return err
+		}
+		return fmtcmd.PrintTask(cmd.OutOrStdout(), fmtcmd.ResolveFormat(flagFormat), created)
+	},
+}
+
+// listCmd lists tasks.
+var listCmd = &cobra.Command{
+	Use:   "list",
+	Short: "List tasks",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		c := mustClient()
+		opts := client.ListOpts{}
+		if cmd.Flags().Changed("all") {
+			opts.Status = ""
+		} else if cmd.Flags().Changed("done") {
+			opts.Status = "done"
+		} else {
+			opts.Status = "open"
+		}
+		opts.Overdue = overdueFlag(cmd)
+		opts.Search, _ = cmd.Flags().GetString("search")
+		projectName, _ := cmd.Flags().GetString("project")
+		if projectName != "" {
+			projects, _ := c.ListProjects(context.Background())
+			for _, p := range projects {
+				if strings.EqualFold(p.Name, projectName) {
+					opts.ProjectID = p.ID
+					break
+				}
+			}
+		}
+		opts.Limit = 500
+		tasks, err := c.ListTasks(context.Background(), opts)
+		if err != nil {
+			return err
+		}
+		return fmtcmd.PrintTasks(cmd.OutOrStdout(), fmtcmd.ResolveFormat(flagFormat), tasks)
+	},
+}
+
+// showCmd shows a single task.
+var showCmd = &cobra.Command{
+	Use:   "show <id>",
+	Short: "Show a task by id (or short prefix)",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		c := mustClient()
+		id, err := resolveTaskID(c, args[0])
+		if err != nil {
+			return err
+		}
+		t, err := c.GetTask(context.Background(), id)
+		if err != nil {
+			return err
+		}
+		return fmtcmd.PrintTask(cmd.OutOrStdout(), fmtcmd.ResolveFormat(flagFormat), t)
+	},
+}
+
+// doneCmd marks a task as completed.
+var doneCmd = &cobra.Command{
+	Use:   "done <id>",
+	Short: "Mark a task as done",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		c := mustClient()
+		id, err := resolveTaskID(c, args[0])
+		if err != nil {
+			return err
+		}
+		completed, next, err := c.CompleteTaskWithRecur(context.Background(), id)
+		if err != nil {
+			return err
+		}
+		return fmtcmd.PrintCompleted(cmd.OutOrStdout(), fmtcmd.ResolveFormat(flagFormat), completed, next)
+	},
+}
+
+// editCmd updates fields on a task.
+var editCmd = &cobra.Command{
+	Use:   "edit <id>",
+	Short: "Edit a task",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		c := mustClient()
+		id, err := resolveTaskID(c, args[0])
+		if err != nil {
+			return err
+		}
+		fields := map[string]any{}
+		if cmd.Flags().Changed("title") {
+			fields["title"], _ = cmd.Flags().GetString("title")
+		}
+		if cmd.Flags().Changed("notes") {
+			fields["notes"], _ = cmd.Flags().GetString("notes")
+		}
+		if cmd.Flags().Changed("priority") {
+			p, _ := cmd.Flags().GetInt("priority")
+			fields["priority"] = p
+		}
+		if cmd.Flags().Changed("due") {
+			dueStr, _ := cmd.Flags().GetString("due")
+			if dueStr == "" || dueStr == "none" {
+				fields["due_at"] = nil
+			} else {
+				t, err := parseDue(dueStr)
+				if err != nil {
+					return err
+				}
+				fields["due_at"] = t.UnixMilli()
+			}
+		}
+		if cmd.Flags().Changed("project") {
+			projectName, _ := cmd.Flags().GetString("project")
+			if projectName == "" {
+				fields["project_id"] = nil
+			} else {
+				projects, _ := c.ListProjects(context.Background())
+				pid := ""
+				for _, p := range projects {
+					if strings.EqualFold(p.Name, projectName) {
+						pid = p.ID
+						break
+					}
+				}
+				if pid == "" {
+					p, err := c.CreateProject(context.Background(), projectName, "")
+					if err != nil {
+						return err
+					}
+					pid = p.ID
+				}
+				fields["project_id"] = pid
+			}
+		}
+		t, err := c.UpdateTask(context.Background(), id, fields)
+		if err != nil {
+			return err
+		}
+		return fmtcmd.PrintTask(cmd.OutOrStdout(), fmtcmd.ResolveFormat(flagFormat), t)
+	},
+}
+
+// rmCmd deletes a task.
+var rmCmd = &cobra.Command{
+	Use:   "rm <id>",
+	Short: "Delete a task",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		c := mustClient()
+		id, err := resolveTaskID(c, args[0])
+		if err != nil {
+			return err
+		}
+		if err := c.DeleteTask(context.Background(), id); err != nil {
+			return err
+		}
+		fmt.Fprintln(cmd.OutOrStdout(), "deleted", id)
+		return nil
+	},
+}
+
+// projectCmd groups project subcommands.
+var projectCmd = &cobra.Command{Use: "project", Short: "Manage projects"}
+var projectListCmd = &cobra.Command{
+	Use:   "list",
+	Short: "List projects",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		c := mustClient()
+		ps, err := c.ListProjects(context.Background())
+		if err != nil {
+			return err
+		}
+		return fmtcmd.PrintProjects(cmd.OutOrStdout(), fmtcmd.ResolveFormat(flagFormat), ps)
+	},
+}
+var projectAddCmd = &cobra.Command{
+	Use:   "add <name>",
+	Short: "Create a project",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		c := mustClient()
+		color, _ := cmd.Flags().GetString("color")
+		p, err := c.CreateProject(context.Background(), args[0], color)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(cmd.OutOrStdout(), "created project %s (%s)\n", p.Name, p.ID)
+		return nil
+	},
+}
+
+// tagCmd groups tag subcommands.
+var tagCmd = &cobra.Command{Use: "tag", Short: "Manage tags"}
+var tagListCmd = &cobra.Command{
+	Use:   "list",
+	Short: "List tags",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		c := mustClient()
+		ts, err := c.ListTags(context.Background())
+		if err != nil {
+			return err
+		}
+		return fmtcmd.PrintTags(cmd.OutOrStdout(), fmtcmd.ResolveFormat(flagFormat), ts)
+	},
+}
+var tagAddCmd = &cobra.Command{
+	Use:   "add <name>",
+	Short: "Create a tag",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		c := mustClient()
+		color, _ := cmd.Flags().GetString("color")
+		t, err := c.CreateTag(context.Background(), args[0], color)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(cmd.OutOrStdout(), "created tag %s (%s)\n", t.Name, t.ID)
+		return nil
+	},
+}
+
+// loginCmd prompts for email and password and stores an API key.
+var loginCmd = &cobra.Command{
+	Use:   "login",
+	Short: "Sign in (or sign up) and store credentials locally",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		cfg, _ := config.Load()
+		if flagServer != "" {
+			cfg.ServerURL = flagServer
+		}
+		if cfg.ServerURL == "" {
+			cfg.ServerURL = defaultServerURL()
+		}
+		reader := bufio.NewReader(cmd.InOrStdin())
+		fmt.Fprint(cmd.OutOrStdout(), "Email: ")
+		email, _ := reader.ReadString('\n')
+		email = strings.TrimSpace(email)
+		pw, err := promptSecret(cmd.OutOrStdout(), "Password: ")
+		if err != nil {
+			return err
+		}
+
+		c := client.New(cfg.ServerURL, "")
+		if err := c.Login(context.Background(), email, pw); err != nil {
+			return err
+		}
+		key, err := c.IssueAPIKey(context.Background(), "cli")
+		if err != nil {
+			return err
+		}
+		cfg.APIKey = key
+		cfg.Email = email
+		if err := config.Save(cfg); err != nil {
+			return err
+		}
+		fmt.Fprintln(cmd.OutOrStdout(), "logged in. API key stored in", config.PathHint())
+		return nil
+	},
+}
+
+// signupCmd creates a new tenant + user and stores credentials.
+var signupCmd = &cobra.Command{
+	Use:   "signup",
+	Short: "Create a new workspace and user",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		cfg, _ := config.Load()
+		if flagServer != "" {
+			cfg.ServerURL = flagServer
+		}
+		if cfg.ServerURL == "" {
+			cfg.ServerURL = defaultServerURL()
+		}
+		reader := bufio.NewReader(cmd.InOrStdin())
+		fmt.Fprint(cmd.OutOrStdout(), "Workspace name: ")
+		tenantName, _ := reader.ReadString('\n')
+		tenantName = strings.TrimSpace(tenantName)
+		fmt.Fprint(cmd.OutOrStdout(), "Email: ")
+		email, _ := reader.ReadString('\n')
+		email = strings.TrimSpace(email)
+		pw, err := promptSecret(cmd.OutOrStdout(), "Password (min 6 chars): ")
+		if err != nil {
+			return err
+		}
+
+		c := client.New(cfg.ServerURL, "")
+		u, err := c.Signup(context.Background(), tenantName, email, pw)
+		if err != nil {
+			return err
+		}
+		// Issue an API key for the CLI.
+		key, err := c.IssueAPIKey(context.Background(), "cli")
+		if err != nil {
+			return err
+		}
+		cfg.APIKey = key
+		cfg.Email = email
+		if err := config.Save(cfg); err != nil {
+			return err
+		}
+		fmt.Fprintf(cmd.OutOrStdout(), "signed up %s (%s)\n", u.Email, u.TenantID)
+		return nil
+	},
+}
+
+// logoutCmd clears local credentials.
+var logoutCmd = &cobra.Command{
+	Use:   "logout",
+	Short: "Clear local credentials",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		_ = config.Clear()
+		fmt.Fprintln(cmd.OutOrStdout(), "logged out")
+		return nil
+	},
+}
+
+// configCmd shows/sets local config.
+var configCmd = &cobra.Command{Use: "config", Short: "Manage CLI config"}
+var configShowCmd = &cobra.Command{
+	Use:   "show",
+	Short: "Show current config",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		cfg, err := config.Load()
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(cmd.OutOrStdout(), "config path: %s\n", config.PathHint())
+		fmt.Fprintf(cmd.OutOrStdout(), "server_url:  %s\n", cfg.ServerURL)
+		fmt.Fprintf(cmd.OutOrStdout(), "email:       %s\n", cfg.Email)
+		fmt.Fprintf(cmd.OutOrStdout(), "api_key:     %s...%s\n", safePrefix(cfg.APIKey), safeSuffix(cfg.APIKey))
+		return nil
+	},
+}
+var configServerCmd = &cobra.Command{
+	Use:   "server <url>",
+	Short: "Set the server URL",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		cfg, _ := config.Load()
+		cfg.ServerURL = args[0]
+		return config.Save(cfg)
+	},
+}
+
+// -------------------------- helpers --------------------------
+
+func mustClient() *client.Client {
+	cfg, err := config.Load()
+	if err != nil {
+		exitError("load config: %v", err)
+	}
+	if cfg.APIKey == "" {
+		exitError("not logged in. Run `ttl login` or `ttl signup`.")
+	}
+	if cfg.ServerURL == "" {
+		cfg.ServerURL = defaultServerURL()
+	}
+	return client.New(cfg.ServerURL, cfg.APIKey)
+}
+
+// defaultServerURL returns the TTL server URL. CLI flag and env var
+// win; otherwise http://localhost:8093 (matches the crash-course
+// quickstart).
+func defaultServerURL() string {
+	if v := os.Getenv("TTL_SERVER_URL"); v != "" {
+		return v
+	}
+	return "http://localhost:8093"
+}
+
+// promptSecret prints prompt and reads a line of input with the
+// terminal echo disabled. Falls back to plain stdin read when the
+// input is not a TTY (e.g. piped from a script).
+func promptSecret(w io.Writer, prompt string) (string, error) {
+	fmt.Fprint(w, prompt)
+	fd := uintptr(os.Stdin.Fd())
+	if term.IsTerminal(fd) {
+		b, err := term.ReadPassword(fd)
+		fmt.Fprintln(w) // move past the hidden line
+		if err != nil {
+			return "", err
+		}
+		return strings.TrimRight(string(b), "\r\n"), nil
+	}
+	// Non-tty: read plainly but emit a warning so users don't
+	// accidentally type secrets into piped scripts.
+	fmt.Fprintln(os.Stderr, "(warning: stdin is not a TTY; reading secret in cleartext)")
+	rd := bufio.NewReader(os.Stdin)
+	line, err := rd.ReadString('\n')
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimRight(line, "\r\n"), nil
+}
+
+// resolveTaskID accepts either a full UUID or a short prefix. It looks
+// up tasks via the configured filter and matches the prefix. Returns
+// the full ID or an error if ambiguous / not found.
+func resolveTaskID(c *client.Client, ref string) (string, error) {
+	if len(ref) == 36 {
+		return ref, nil
+	}
+	tasks, err := c.ListTasks(context.Background(), client.ListOpts{Status: "", Limit: 500})
+	if err != nil {
+		return "", err
+	}
+	var matches []string
+	for _, t := range tasks {
+		if strings.HasPrefix(t.ID, ref) {
+			matches = append(matches, t.ID)
+		}
+	}
+	switch len(matches) {
+	case 1:
+		return matches[0], nil
+	case 0:
+		return "", fmt.Errorf("no task with id prefix %q", ref)
+	default:
+		return "", fmt.Errorf("ambiguous id prefix %q matches %d tasks", ref, len(matches))
+	}
+}
+
+// parseDue accepts:
+//
+//	today, tomorrow, monday..sunday (next occurrence)
+//	YYYY-MM-DD, YYYY-MM-DDTHH:MM
+//	"" -> error so callers can disambiguate from "none"
+func parseDue(s string) (time.Time, error) {
+	s = strings.ToLower(strings.TrimSpace(s))
+	if s == "" {
+		return time.Time{}, errors.New("empty due")
+	}
+	now := time.Now()
+	switch s {
+	case "today":
+		return time.Date(now.Year(), now.Month(), now.Day(), 23, 59, 0, 0, now.Location()), nil
+	case "tomorrow":
+		t := now.Add(24 * time.Hour)
+		return time.Date(t.Year(), t.Month(), t.Day(), 23, 59, 0, 0, t.Location()), nil
+	case "none":
+		return time.Time{}, nil
+	}
+	if t, err := time.Parse("2006-01-02", s); err == nil {
+		return t, nil
+	}
+	if t, err := time.Parse("2006-01-02T15:04", s); err == nil {
+		return t, nil
+	}
+	for i, name := range []string{"sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"} {
+		if s == name {
+			days := (i - int(now.Weekday()) + 7) % 7
+			if days == 0 {
+				days = 7
+			}
+			t := now.Add(time.Duration(days) * 24 * time.Hour)
+			return time.Date(t.Year(), t.Month(), t.Day(), 23, 59, 0, 0, t.Location()), nil
+		}
+	}
+	return time.Time{}, fmt.Errorf("unrecognised due date %q (try today, tomorrow, monday, YYYY-MM-DD)", s)
+}
+
+func overdueFlag(cmd *cobra.Command) bool {
+	b, _ := cmd.Flags().GetBool("overdue")
+	return b
+}
+
+func safePrefix(s string) string {
+	if len(s) < 8 {
+		return "***"
+	}
+	return s[:8]
+}
+func safeSuffix(s string) string {
+	if len(s) < 4 {
+		return "***"
+	}
+	return s[len(s)-4:]
+}
+
+// exitError prints to stderr and exits with a non-zero status.
+// Used for fatal config errors where cobra cannot help.
+func exitError(format string, args ...any) {
+	fmt.Fprintf(os.Stderr, "ttl: "+format+"\n", args...)
+	os.Exit(2)
+}
+
+// init wires all commands and persistent flags.
+func init() {
+	// Global flags on root.
+	rootCmd.PersistentFlags().StringVar(&flagFormat, "format", "text", "output format: text|json|ndjson")
+	rootCmd.PersistentFlags().StringVar(&flagServer, "server", "", "override server URL for this command")
+
+	// Subcommand wiring.
+	rootCmd.AddCommand(cliCmd)
+	cliCmd.AddCommand(addCmd, listCmd, showCmd, doneCmd, editCmd, rmCmd)
+	cliCmd.AddCommand(projectCmd, tagCmd, loginCmd, signupCmd, logoutCmd, configCmd)
+	cliCmd.AddCommand(startCmd, stopCmd, pomodoroCmd, logCmd, timerCmd)
+	rootCmd.AddCommand(todayCmd, inboxCmd, serveCmd)
+
+	// add flags.
+	addCmd.Flags().IntP("priority", "p", 0, "priority 0..3 (3=high)")
+	addCmd.Flags().StringP("project", "P", "", "project name (created on demand)")
+	addCmd.Flags().StringSliceP("tag", "t", nil, "tags (comma-separated)")
+	addCmd.Flags().StringP("due", "d", "", "due: today|tomorrow|monday|YYYY-MM-DD")
+	addCmd.Flags().StringP("notes", "n", "", "notes (markdown)")
+
+	// list flags.
+	listCmd.Flags().Bool("all", false, "include done tasks")
+	listCmd.Flags().Bool("done", false, "only done tasks")
+	listCmd.Flags().Bool("overdue", false, "only overdue tasks")
+	listCmd.Flags().String("search", "", "search title/notes")
+	listCmd.Flags().StringP("project", "P", "", "filter by project name")
+
+	// edit flags.
+	editCmd.Flags().StringP("title", "t", "", "new title")
+	editCmd.Flags().StringP("notes", "n", "", "new notes")
+	editCmd.Flags().IntP("priority", "p", 0, "new priority")
+	editCmd.Flags().StringP("due", "d", "", "new due (or 'none')")
+	editCmd.Flags().StringP("project", "P", "", "new project (or '' to clear)")
+
+	// project/tag subcommands.
+	projectCmd.AddCommand(projectListCmd, projectAddCmd)
+	projectAddCmd.Flags().String("color", "", "hex color, e.g. #ff8800")
+	tagCmd.AddCommand(tagListCmd, tagAddCmd)
+	tagAddCmd.Flags().String("color", "", "hex color")
+
+	// config subcommands.
+	configCmd.AddCommand(configShowCmd, configServerCmd)
+}

@@ -1,0 +1,442 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>ttl guide</title>
+<style>
+  :root {
+    --fg: #1a1a1a;
+    --muted: #6b6b6b;
+    --bg: #fdfdfb;
+    --accent: #2a6f4a;
+    --border: #ececec;
+    --code-bg: #f4f4ef;
+    --kbd-bg: #f0f0eb;
+    --link: #2a6f4a;
+    --max: 760px;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --fg: #ececec;
+      --muted: #8b8b8b;
+      --bg: #141414;
+      --accent: #7dbe9b;
+      --border: #262626;
+      --code-bg: #1d1d1d;
+      --kbd-bg: #1d1d1d;
+      --link: #7dbe9b;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap {
+    max-width: var(--max);
+    margin: 0 auto;
+    padding: 3rem 1.25rem 6rem;
+  }
+  header {
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 1.5rem;
+    margin-bottom: 2.5rem;
+  }
+  .brand {
+    display: flex;
+    align-items: baseline;
+    gap: .6rem;
+    margin-bottom: .35rem;
+  }
+  .brand h1 {
+    margin: 0;
+    font-size: 2rem;
+    letter-spacing: -.02em;
+    font-weight: 700;
+  }
+  .brand .ver {
+    font-family: var(--mono);
+    font-size: .8rem;
+    color: var(--muted);
+  }
+  .tag {
+    color: var(--muted);
+    font-size: 1rem;
+    margin: 0 0 .25rem;
+  }
+  .lede {
+    color: var(--muted);
+    font-size: 1rem;
+    max-width: 38rem;
+    margin: 0;
+  }
+  nav.toc {
+    margin: 0 0 2.5rem;
+    padding: 1rem 1.1rem;
+    background: var(--code-bg);
+    border-radius: 6px;
+    font-size: .9rem;
+  }
+  nav.toc strong {
+    display: block;
+    font-size: .75rem;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: var(--muted);
+    margin-bottom: .55rem;
+  }
+  nav.toc ol {
+    margin: 0;
+    padding-left: 1.2rem;
+    column-count: 2;
+    column-gap: 1.5rem;
+  }
+  @media (max-width: 600px) { nav.toc ol { column-count: 1; } }
+  nav.toc li { margin: .15rem 0; break-inside: avoid; }
+  nav.toc a { color: var(--link); text-decoration: none; }
+  nav.toc a:hover { text-decoration: underline; }
+
+  h2 {
+    font-size: 1.35rem;
+    letter-spacing: -.01em;
+    margin: 2.75rem 0 .75rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+  }
+  h2:first-of-type { border-top: 0; padding-top: 0; margin-top: 0; }
+  h3 {
+    font-size: 1.05rem;
+    margin: 1.6rem 0 .45rem;
+    color: var(--fg);
+  }
+  p { margin: .6rem 0 .9rem; }
+  a { color: var(--link); }
+  ul, ol { padding-left: 1.4rem; }
+  li { margin: .25rem 0; }
+
+  code, kbd {
+    font-family: var(--mono);
+    font-size: .88em;
+  }
+  :not(pre) > code {
+    background: var(--code-bg);
+    padding: .12em .38em;
+    border-radius: 3px;
+  }
+  kbd {
+    background: var(--kbd-bg);
+    border: 1px solid var(--border);
+    border-bottom-width: 2px;
+    border-radius: 3px;
+    padding: .05em .45em;
+    font-size: .82em;
+  }
+  pre {
+    margin: 1rem 0;
+    padding: .9rem 1rem;
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow-x: auto;
+    line-height: 1.5;
+  }
+  pre code {
+    background: none;
+    padding: 0;
+    font-size: .85rem;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0;
+    font-size: .92rem;
+  }
+  th, td {
+    text-align: left;
+    padding: .5rem .65rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  th {
+    font-weight: 600;
+    color: var(--muted);
+    font-size: .8rem;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+  }
+
+  .note {
+    border-left: 3px solid var(--accent);
+    padding: .25rem 0 .25rem .9rem;
+    color: var(--muted);
+    margin: 1rem 0;
+    font-size: .93rem;
+  }
+
+  footer {
+    margin-top: 4rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+    color: var(--muted);
+    font-size: .85rem;
+  }
+  footer a { color: var(--muted); }
+
+  @media print {
+    body { font-size: 11pt; background: white; color: black; }
+    nav.toc, footer { display: none; }
+    pre, :not(pre) > code, kbd { background: #f5f5f5; color: black; }
+    pre { border-color: #ddd; }
+    h2 { break-before: page; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="brand">
+    <h1>ttl</h1>
+    <span class="ver">v0.4.0</span>
+  </div>
+  <p class="tag">Terminal Task List &mdash; a tiny, AI-friendly task tracker.</p>
+  <p class="lede">
+    A single static binary (~13&nbsp;MB) with CLI, TUI, web UI, REST API,
+    and MCP server. Multi-tenant, SQLite-backed, no CGO.
+  </p>
+</header>
+
+<nav class="toc">
+  <strong>Contents</strong>
+  <ol>
+    <li><a href="#install">Install</a></li>
+    <li><a href="#start">Quick start</a></li>
+    <li><a href="#model">Mental model</a></li>
+    <li><a href="#surfaces">Surfaces</a></li>
+    <li><a href="#capture">Capture &amp; review</a></li>
+    <li><a href="#focus">Focus &amp; time</a></li>
+    <li><a href="#recur">Recurring &amp; reminders</a></li>
+    <li><a href="#agents">AI agents</a></li>
+    <li><a href="#integrations">Integrations</a></li>
+    <li><a href="#config">Config &amp; files</a></li>
+  </ol>
+</nav>
+
+<h2 id="install">Install</h2>
+
+<p>Download a release binary from your project's <code>dist/</code>
+folder, or build from source:</p>
+
+<pre><code>go install ./cmd/ttl@latest
+# or
+git clone ttl &amp;&amp; cd ttl &amp;&amp; make build</code></pre>
+
+<p>Place <code>ttl</code> somewhere on your <code>$PATH</code>.
+That's it &mdash; no daemon, no service to register.</p>
+
+<h2 id="start">Quick start</h2>
+
+<p>Two terminals. One runs the server, the other talks to it.</p>
+
+<pre><code># 1. Server (terminal A)
+ttl serve --addr :8093 --db ~/ttl.db
+
+# 2. Sign up (terminal B) &mdash; prints your API key
+ttl signup --server http://localhost:8093
+
+# 3. Capture a few tasks
+ttl add "Write docs"        --project docs  --tag p1
+ttl add "Review PR #42"     --project eng   --due tomorrow
+ttl add "Weekly standup"    --rrule "FREQ=WEEKLY;BYDAY=MO"
+
+# 4. Review
+ttl today          # what's due / in progress
+ttl inbox          # everything else
+ttl                # bare command opens the TUI today view
+
+# 5. Complete
+ttl done &lt;task-id&gt; --print-next   # shows next spawn if recurring
+</code></pre>
+
+<h2 id="model">Mental model</h2>
+
+<table>
+  <thead><tr><th>Concept</th><th>What it is</th></tr></thead>
+  <tbody>
+    <tr><td>Tenant</td><td>Isolation boundary. Every user belongs to one. Data never crosses tenants.</td></tr>
+    <tr><td>User</td><td>Belongs to a tenant, has bcrypt password + API keys.</td></tr>
+    <tr><td>Project</td><td>A named bucket for tasks.</td></tr>
+    <tr><td>Tag</td><td>Free-form label. A task can have many.</td></tr>
+    <tr><td>Task</td><td>The atom. Title, project, tags, due, recurrence, notes, subtasks.</td></tr>
+    <tr><td>Time entry</td><td>A timer run on a task (or on &ldquo;general&rdquo;). Records started_at / ended_at.</td></tr>
+    <tr><td>Reminder</td><td>A timestamped note. Background ticker fires OS notifications.</td></tr>
+    <tr><td>Integration</td><td>A linked external issue tracker (GitHub, Linear). Issues mirror as tasks.</td></tr>
+  </tbody>
+</table>
+
+<div class="note">
+Multi-tenancy is enforced at two layers: the type system requires
+every store call to carry a <code>*tenant.Context</code>, and every SQL
+query includes <code>tenant_id</code> in its <code>WHERE</code>. There's
+no global path.
+</div>
+
+<h2 id="surfaces">Surfaces</h2>
+
+<table>
+  <thead><tr><th>Surface</th><th>Entry</th><th>Best for</th></tr></thead>
+  <tbody>
+    <tr><td>CLI</td><td><code>ttl &lt;cmd&gt;</code></td><td>Fast capture, scripts</td></tr>
+    <tr><td>TUI</td><td><code>ttl</code></td><td>Triage, vim-style navigation</td></tr>
+    <tr><td>Web</td><td><code>http://localhost:8093/</code></td><td>Phone, shared machines</td></tr>
+    <tr><td>REST</td><td><code>/api/v1/...</code></td><td>Anything that speaks HTTP</td></tr>
+    <tr><td>MCP</td><td><code>ttl mcp</code></td><td>Claude / Cursor / Cline</td></tr>
+    <tr><td>WebSocket</td><td><code>/api/v1/ws?token=...</code></td><td>Live updates</td></tr>
+  </tbody>
+</table>
+
+<h2 id="capture">Capture &amp; review</h2>
+
+<h3>Add</h3>
+<pre><code>ttl add "title" [--project p] [--tag t] [--due 2026-07-01] [--rrule "..."] [--notes "..."]
+ttl add "subtask" --parent &lt;task-id&gt;
+ttl add "title" --json   # emit the task as NDJSON to stdout (for piping)
+</code></pre>
+
+<h3>List &amp; filter</h3>
+<pre><code>ttl list tasks                          # all
+ttl list tasks --project docs --tag p1  # filtered
+ttl list tasks --since 2026-06-01
+ttl list tasks -o ndjson | jq -r '.id'  # pipeline
+</code></pre>
+
+<h3>Output formats</h3>
+<p>Every list command accepts <code>-o text|json|ndjson</code>.
+NDJSON is one record per line &mdash; ideal for agents and <code>jq</code>.</p>
+
+<h3>TUI keys</h3>
+<ul>
+  <li><kbd>j</kbd>/<kbd>k</kbd> or <kbd>&uarr;</kbd>/<kbd>&darr;</kbd> &mdash; move</li>
+  <li><kbd>Enter</kbd> &mdash; show details</li>
+  <li><kbd>d</kbd> &mdash; mark done</li>
+  <li><kbd>n</kbd> &mdash; new task</li>
+  <li><kbd>t</kbd> &mdash; toggle today / inbox</li>
+  <li><kbd>q</kbd> &mdash; quit</li>
+</ul>
+
+<h2 id="focus">Focus &amp; time</h2>
+
+<pre><code>ttl timer start &lt;task-id&gt;     # or omit id for "general"
+ttl timer stop
+ttl timer                      # what's running
+
+ttl pomodoro                   # 25 min focus / 5 min break
+ttl pomodoro --focus 50 --break 10
+
+ttl log                        # today's worklog summary
+ttl log --week                 # this week
+ttl log --project docs         # filtered
+</code></pre>
+
+<p>Only one timer per user can run at a time. Starting a new one
+without stopping the old one returns the active timer.</p>
+
+<h2 id="recur">Recurring &amp; reminders</h2>
+
+<h3>Recurring tasks</h3>
+<pre><code>ttl add "Standup"  --rrule "FREQ=WEEKLY;BYDAY=MO"
+ttl add "Pay rent" --rrule "FREQ=MONTHLY;BYMONTHDAY=1"
+ttl add "Backup"   --rrule "FREQ=DAILY"
+</code></pre>
+
+<p>Completing a recurring task spawns the next occurrence. Use
+<code>--print-next</code> to see it:</p>
+
+<pre><code>ttl done &lt;task-id&gt; --print-next
+# task abc closed
+# next occurrence: def (due 2026-07-04)
+</code></pre>
+
+<h3>Reminders</h3>
+<pre><code>ttl reminder "call mom" --at "2026-06-28T09:00"
+ttl reminder list
+ttl reminder rm &lt;id&gt;
+</code></pre>
+
+<p>The server checks for due reminders every 60 seconds and fires a
+best-effort OS notification (<code>osascript</code>,
+<code>notify-send</code>, or <code>msg</code>).</p>
+
+<h2 id="agents">AI agents (MCP)</h2>
+
+<p><code>ttl mcp</code> speaks JSON-RPC 2.0 over stdio with 10 tools:</p>
+
+<table>
+  <thead><tr><th>Tool</th><th>What it does</th></tr></thead>
+  <tbody>
+    <tr><td><code>add_task</code></td><td>Create a task</td></tr>
+    <tr><td><code>list_tasks</code></td><td>Filter and list</td></tr>
+    <tr><td><code>show_task</code></td><td>Fetch by id</td></tr>
+    <tr><td><code>search_tasks</code></td><td>Free-text + tag search</td></tr>
+    <tr><td><code>complete_task</code></td><td>Mark done (spawns next if recurring)</td></tr>
+    <tr><td><code>delete_task</code></td><td>Delete by id</td></tr>
+    <tr><td><code>start_timer</code></td><td>Begin timer on a task</td></tr>
+    <tr><td><code>stop_timer</code></td><td>End current timer</td></tr>
+    <tr><td><code>active_timer</code></td><td>What's running now</td></tr>
+    <tr><td><code>worklog_today</code></td><td>Today's worklog summary</td></tr>
+  </tbody>
+</table>
+
+<p>Wire it into Claude Desktop / Cursor / Cline as a stdio MCP server.
+See <code>docs/mcp.md</code> in the source repo for the JSON config.</p>
+
+<h2 id="integrations">Integrations</h2>
+
+<pre><code>ttl integrations add github --label "my-work"
+ttl integrations add linear --label "my-team"
+ttl integrations list
+ttl integrations sync &lt;id&gt;
+ttl integrations remove &lt;id&gt;
+</code></pre>
+
+<p>For instant updates, set the webhook URL the installer prints on your
+GitHub or Linear webhook config. Webhook signatures are HMAC-SHA256
+verified against the secret you provided at setup.</p>
+
+<h2 id="config">Config &amp; files</h2>
+
+<table>
+  <thead><tr><th>Path</th><th>Purpose</th></tr></thead>
+  <tbody>
+    <tr><td><code>~/.config/ttl/config.json</code></td><td>CLI config: server URL, API key (0600).</td></tr>
+    <tr><td><code>~/ttl.db</code> (or <code>--db</code>)</td><td>Server SQLite database (WAL mode).</td></tr>
+    <tr><td><code>--addr</code></td><td>Listen address (default <code>:8093</code>).</td></tr>
+    <tr><td><code>--reminder-interval</code></td><td>Reminder check cadence (default <code>60s</code>).</td></tr>
+  </tbody>
+</table>
+
+<p>All environment variables are passed through standard Go conventions.
+See <code>ttl serve --help</code> for the full list.</p>
+
+<footer>
+  ttl &mdash; made by humans, for humans <em>and</em> agents.
+  Docs in the repo: <code>docs/architecture.md</code>,
+  <code>docs/cli.md</code>, <code>docs/api.md</code>,
+  <code>docs/mcp.md</code>, <code>docs/integrations.md</code>,
+  <code>docs/deploy.md</code>.
+</footer>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>ttl — sign in</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body class="auth">
+  <main>
+    <h1>ttl</h1>
+    <p class="muted">Terminal-first task tracker</p>
+    <article>
+      <div role="group">
+        <button id="show-login" class="secondary">Sign in</button>
+        <button id="show-signup">Create workspace</button>
+      </div>
+      <form id="login-form" hidden>
+        <label>Email <input name="email" type="email" required></label>
+        <label>Password <input name="password" type="password" required></label>
+        <button type="submit">Sign in</button>
+        <small class="error" id="login-error"></small>
+      </form>
+      <form id="signup-form" hidden>
+        <label>Workspace <input name="tenant_name" required></label>
+        <label>Email <input name="email" type="email" required></label>
+        <label>Password <input name="password" type="password" minlength="6" required></label>
+        <button type="submit">Create</button>
+        <small class="error" id="signup-error"></small>
+      </form>
+    </article>
+  </main>
+  <script src="/app.js"></script>
+  <script>window.ttl.bootAuth()</script>
+</body>
+</html>

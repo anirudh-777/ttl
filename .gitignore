@@ -1,0 +1,39 @@
+# Build artefacts
+bin/
+dist/
+
+# Local data and config
+*.db
+*.db-wal
+*.db-shm
+.ttl/
+.ttl.db*
+
+# IDE / editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Go
+*.test
+*.out
+coverage.out
+coverage.html
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# OS
+.DS_Store
+Thumbs.db
+
+# pre-commit
+.pre-commit-cache/
+
+# Factory / Droid skill config (local dev tooling, not source)
+.agents/
+skills-lock.json

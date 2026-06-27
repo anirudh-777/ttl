@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>ttl</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <a href="/today" class="brand">ttl</a>
+    <nav>
+      <a href="/today">Today</a>
+      <a href="/inbox">Inbox</a>
+      <a href="/projects">Projects</a>
+      <a href="/settings">Settings</a>
+    </nav>
+    <span class="user" id="user-email"></span>
+  </header>
+  <main id="main"></main>
+  <script src="/app.js?v=20260627-1109"></script>
+  <script>
+    // Defensive boot: app.js loads above and (on success) defines
+    // window.ttl.{boot,bootAuth}. If anything goes wrong, surface it
+    // instead of leaving a blank page.
+    (function () {
+      function showError(msg) {
+        var m = document.getElementById('main');
+        if (m) m.innerHTML = '<div class="empty error">' + msg + '</div>';
+      }
+      try {
+        if (!window.ttl || typeof window.ttl.boot !== 'function') {
+          // Last resort: render a minimal in-page task list so the
+          // user can see *something* even if app.js is broken.
+          var m = document.getElementById('main');
+          if (m && !m.innerHTML) {
+            m.innerHTML =
+              '<div class="empty error">' +
+                'Failed to load ttl web client (app.js).<br>' +
+                'Server build: <code id="ttl-version">unknown</code><br>' +
+                '<button onclick="location.reload(true)">Hard refresh</button>' +
+              '</div>';
+            fetch('/version').then(function(r){return r.json();}).then(function(v){
+              var el = document.getElementById('ttl-version');
+              if (el) el.textContent = v.version + ' (' + v.built + ')';
+            });
+          }
+        } else {
+          window.ttl.boot();
+        }
+      } catch (e) {
+        showError('Boot error: ' + (e && e.message ? e.message : e));
+      }
+    })();
+  </script>
+</body>
+</html>

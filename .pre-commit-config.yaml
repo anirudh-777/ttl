@@ -1,0 +1,69 @@
+# ttl — pre-commit hooks.
+#
+# Install once:
+#   python3 -m pip install --user pre-commit
+#   pre-commit install
+#
+# Run manually against every file:
+#   pre-commit run --all-files
+#
+# A `make precommit` target wires this up for convenience.
+
+minimum_pre_commit_version: "3.5.0"
+
+repos:
+  # ----- Secrets -----
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.0
+    hooks:
+      - id: gitleaks
+
+  # ----- Basic hygiene -----
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+      - id: end-of-file-fixer
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: [--maxkb=512]
+      - id: check-yaml
+        exclude: ^deploy/homebrew/.*\.rb$
+      - id: check-json
+      - id: check-toml
+      - id: check-case-conflict
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      - id: detect-private-key
+
+  # ----- Go (fmt only — dnephin's go-vet hook expects single-file
+  # invocations that don't work well with `pre-commit run --all-files`,
+  # so we run vet + build + mod tidy as local hooks below). -----
+  - repo: https://github.com/dnephin/pre-commit-golang
+    rev: v0.5.1
+    hooks:
+      - id: go-fmt
+
+  # ----- Local Go hooks. Run via system Go so we can pass
+  # CGO_ENABLED=0 and trimpath the same way the Makefile does. -----
+  - repo: local
+    hooks:
+      - id: go-vet
+        name: go vet
+        entry: bash -c 'CGO_ENABLED=0 go vet ./...'
+        language: system
+        types: [go]
+        pass_filenames: false
+      - id: go-build
+        name: go build (CGO_ENABLED=0)
+        entry: bash -c 'CGO_ENABLED=0 go build -trimpath ./...'
+        language: system
+        types: [go]
+        pass_filenames: false
+      - id: go-mod-tidy
+        name: go mod tidy (check)
+        entry: bash -c 'cp go.mod /tmp/.go.mod.before && go mod tidy && diff -q /tmp/.go.mod.before go.mod >/dev/null'
+        language: system
+        types: [go]
+        pass_filenames: false

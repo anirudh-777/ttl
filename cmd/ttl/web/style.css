@@ -1,0 +1,126 @@
+:root {
+  --bg: #1a1a1a;
+  --fg: #e8e8e8;
+  --muted: #888;
+  --accent: #7dd3fc;
+  --ok: #4ade80;
+  --warn: #fbbf24;
+  --err: #f87171;
+  --line: #2a2a2a;
+  --pri-low: #94a3b8;
+  --pri-med: #fbbf24;
+  --pri-high: #f87171;
+}
+
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; padding: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+}
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.muted { color: var(--muted); }
+.error { color: var(--err); }
+.ok { color: var(--ok); }
+button {
+  background: var(--accent); color: #000; border: 0;
+  padding: 6px 14px; border-radius: 4px; cursor: pointer; font-weight: 600;
+}
+button.secondary { background: transparent; color: var(--fg); border: 1px solid var(--line); }
+button:hover { filter: brightness(1.1); }
+input, textarea, select {
+  background: #0f0f0f; color: var(--fg); border: 1px solid var(--line);
+  padding: 6px 10px; border-radius: 4px; font: inherit;
+  width: 100%;
+}
+label { display: block; margin: 0.6em 0; }
+label > span { display: block; color: var(--muted); font-size: 0.9em; }
+
+.topbar {
+  display: flex; align-items: center; gap: 1.5rem;
+  padding: 0.7rem 1.2rem; border-bottom: 1px solid var(--line);
+  position: sticky; top: 0; background: var(--bg); z-index: 10;
+}
+.topbar .brand { font-weight: 700; font-size: 1.1em; color: var(--fg); }
+.topbar nav { display: flex; gap: 1rem; flex: 1; }
+.topbar nav a { color: var(--muted); }
+.topbar nav a.active, .topbar nav a:hover { color: var(--fg); }
+.topbar .user { color: var(--muted); font-size: 0.9em; }
+
+main { padding: 1.2rem; max-width: 900px; margin: 0 auto; }
+
+h1, h2, h3 { margin: 0.4em 0; }
+
+.composer {
+  display: flex; gap: 0.5rem; margin: 1rem 0;
+}
+.composer input { flex: 1; }
+
+ul.tasklist { list-style: none; padding: 0; margin: 0; }
+ul.tasklist li {
+  display: flex; align-items: center; gap: 0.6rem;
+  padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--line);
+}
+ul.tasklist li:hover { background: #222; }
+ul.tasklist .title { flex: 1; }
+ul.tasklist .title.done { text-decoration: line-through; color: var(--muted); }
+ul.tasklist .meta { color: var(--muted); font-size: 0.85em; }
+ul.tasklist .pri-high { color: var(--pri-high); }
+ul.tasklist .pri-med  { color: var(--pri-med); }
+ul.tasklist .pri-low  { color: var(--pri-low); }
+ul.tasklist .due-overdue { color: var(--err); }
+ul.tasklist .due-today { color: var(--warn); }
+ul.tasklist .tag {
+  display: inline-block; background: var(--line); padding: 1px 6px;
+  border-radius: 8px; margin-right: 4px; font-size: 0.8em;
+}
+ul.tasklist button.del { background: transparent; color: var(--err); padding: 2px 6px; }
+
+.active-timer {
+  display: flex; align-items: center; gap: 0.6rem;
+  background: #2a2110; border: 1px solid var(--warn);
+  border-radius: 6px; padding: 0.5rem 0.8rem;
+  margin: 0.8rem 0;
+}
+.active-timer .dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--warn); animation: pulse 1.5s infinite;
+}
+@keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.3;} }
+.active-timer .elapsed { font-family: ui-monospace, monospace; }
+button.small { padding: 2px 8px; font-size: 0.85em; }
+
+.worklog {
+  background: #181818; border: 1px solid var(--line);
+  border-radius: 6px; padding: 0.6rem 0.8rem;
+  margin: 0.8rem 0;
+}
+.worklog table { width: 100%; border-collapse: collapse; }
+.worklog th { text-align: left; color: var(--muted); font-weight: normal; padding: 4px 0; }
+.worklog td { padding: 4px 8px 4px 0; }
+
+#toast-host {
+  position: fixed; bottom: 16px; right: 16px; display: flex; flex-direction: column; gap: 6px; z-index: 100;
+}
+.toast {
+  background: #2a2110; border: 1px solid var(--warn);
+  border-radius: 4px; padding: 8px 14px; color: var(--fg);
+  max-width: 320px; box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+  transition: opacity 0.6s, transform 0.6s;
+}
+.toast.fade { opacity: 0; transform: translateX(20px); }
+
+.empty { color: var(--muted); padding: 1rem; text-align: center; }
+
+.auth main { max-width: 380px; padding-top: 4rem; }
+.auth h1 { font-size: 2em; }
+.auth form { margin-top: 1rem; }
+.auth .error { display: block; margin-top: 0.5em; min-height: 1.2em; }
+
+@media (max-width: 600px) {
+  .topbar { flex-wrap: wrap; gap: 0.6rem; }
+  .topbar nav { order: 3; flex-basis: 100%; }
+}
