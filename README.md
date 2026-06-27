@@ -5,6 +5,8 @@ the keyboard. One static ~13 MB binary that ships a CLI, a Bubble Tea
 TUI, a REST API, a WebSocket live-update channel, an MCP server for AI
 agents, and a web UI.
 
+**Project site: <https://anirudh-777.github.io/ttl/>**
+
 ```
 $ ttl add "Ship the README" --due today -p 3
 $ ttl list
