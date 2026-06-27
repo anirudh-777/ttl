@@ -1,3 +1,7 @@
+---
+layout: default
+title: CLI reference
+---
 # CLI reference
 
 Every command accepts `--format text|json|ndjson` for machine-readable
@@ -109,7 +113,7 @@ running.
 ttl mcp                             # run MCP server on stdio
 ```
 
-See [docs/mcp.md](mcp.md) for setup with Claude, Cursor, or Cline.
+See [docs/mcp.md](mcp.html) for setup with Claude, Cursor, or Cline.
 
 ## Server
 

@@ -1,3 +1,7 @@
+---
+layout: default
+title: Integrations
+---
 # Integrations
 
 ttl can pull issues from external services (currently GitHub and Linear)

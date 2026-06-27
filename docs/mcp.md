@@ -1,3 +1,7 @@
+---
+layout: default
+title: MCP server (AI agents)
+---
 # MCP server (AI agents)
 
 ttl ships a built-in [Model Context Protocol](https://modelcontextprotocol.io)

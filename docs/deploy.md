@@ -1,3 +1,7 @@
+---
+layout: default
+title: Deployment
+---
 # Deployment
 
 ## Single host (simplest)

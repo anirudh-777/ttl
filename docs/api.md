@@ -1,3 +1,7 @@
+---
+layout: default
+title: REST API reference
+---
 # REST API reference
 
 Base URL: `http://localhost:8093` (configurable via `ttl serve --addr`).

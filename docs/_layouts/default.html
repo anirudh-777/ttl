@@ -1,0 +1,91 @@
+---
+---
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="description" content="{{ page.description | default: 'ttl — terminal-first, multi-tenant task tracker. One static binary that ships a CLI, TUI, web UI, REST API, WebSocket live updates, and an MCP server for AI agents.' }}">
+<meta property="og:title" content="{% if page.title %}{{ page.title }} | {% endif %}ttl — terminal-first task tracker">
+<meta property="og:description" content="{{ page.description | default: 'One static Go binary. CLI, TUI, web UI, REST API, MCP. SQLite + WAL, no CGO, row-level multi-tenancy.' }}">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://anirudh-777.github.io/ttl/{{ page.url }}">
+<title>{% if page.title %}{{ page.title }} | {% endif %}ttl — terminal-first task tracker</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%232a6f4a'/%3E%3Ctext x='32' y='44' text-anchor='middle' font-family='ui-monospace,monospace' font-weight='700' font-size='34' fill='%23fdfdfb'%3Ettl%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="{{ '/assets/css/ttl.css' | relative_url }}">
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-inner">
+    <a class="nav-brand" href="{{ '/' | relative_url }}"><span class="dot"></span>ttl</a>
+    <div class="nav-links">
+      <a href="{{ '/' | relative_url }}#surfaces">Surfaces</a>
+      <a href="{{ '/' | relative_url }}#features">Features</a>
+      <a href="{{ '/' | relative_url }}#integrations">Integrations</a>
+      <a href="{{ '/guide.html' | relative_url }}">Guide</a>
+    </div>
+    <a class="nav-cta" href="https://github.com/anirudh-777/ttl">GitHub &rarr;</a>
+  </div>
+</nav>
+
+<main>
+  {{ content }}
+</main>
+
+<footer>
+  <div class="links">
+    <a href="https://github.com/anirudh-777/ttl">GitHub</a>
+    <a href="https://github.com/anirudh-777/ttl#readme">README</a>
+    <a href="{{ '/guide.html' | relative_url }}">Guide</a>
+    <a href="{{ '/architecture.html' | relative_url }}">Architecture</a>
+    <a href="{{ '/api.html' | relative_url }}">API</a>
+    <a href="{{ '/mcp.html' | relative_url }}">MCP</a>
+    <a href="https://github.com/anirudh-777/ttl/releases">Releases</a>
+  </div>
+  <div class="meta">MIT License &middot; made by humans, for humans <em>and</em> agents</div>
+</footer>
+
+{% if page.url == "/" %}
+<script>
+  // Install tab switcher + copy buttons. Loaded only on the landing
+  // page; the queries return empty NodeLists on other pages, so this
+  // is harmless but kept opt-in for cleanliness.
+  document.querySelectorAll('.install-tab').forEach((t) => {
+    const panels = {
+      mac: document.getElementById('cmd-mac'),
+      brew: document.getElementById('cmd-brew'),
+      build: document.getElementById('cmd-build'),
+    };
+    t.addEventListener('click', () => {
+      document.querySelectorAll('.install-tab').forEach((x) => x.setAttribute('aria-selected', x === t ? 'true' : 'false'));
+      Object.entries(panels).forEach(([k, el]) => { if (el) el.hidden = k !== t.dataset.target; });
+    });
+  });
+
+  document.querySelectorAll('.copy-btn').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const panel = document.getElementById(btn.dataset.copy);
+      if (!panel) return;
+      const code = panel.querySelector('code').textContent;
+      try {
+        await navigator.clipboard.writeText(code);
+        const old = btn.textContent;
+        btn.textContent = 'copied';
+        btn.classList.add('copied');
+        setTimeout(() => { btn.textContent = old; btn.classList.remove('copied'); }, 1400);
+      } catch {
+        const range = document.createRange();
+        range.selectNodeContents(panel.querySelector('code'));
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+      }
+    });
+  });
+</script>
+{% endif %}
+
+</body>
+</html>
