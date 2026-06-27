@@ -21,8 +21,8 @@ import (
 
 	"github.com/coder/websocket"
 
-	"github.com/anirudhprakash/ttl/internal/auth"
-	"github.com/anirudhprakash/ttl/internal/events"
+	"github.com/anirudh-777/ttl/internal/auth"
+	"github.com/anirudh-777/ttl/internal/events"
 )
 
 // Server wires the events hub into HTTP upgrades.

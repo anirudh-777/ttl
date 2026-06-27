@@ -16,7 +16,7 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/anirudhprakash/ttl/internal/model"
+	"github.com/anirudh-777/ttl/internal/model"
 )
 
 // Format selects the output renderer.

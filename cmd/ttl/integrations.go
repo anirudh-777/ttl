@@ -11,7 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/anirudhprakash/ttl/internal/client"
+	"github.com/anirudh-777/ttl/internal/client"
 )
 
 // integrationsCmd groups integration subcommands.

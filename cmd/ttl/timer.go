@@ -10,8 +10,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/anirudhprakash/ttl/internal/client"
-	"github.com/anirudhprakash/ttl/internal/model"
+	"github.com/anirudh-777/ttl/internal/client"
+	"github.com/anirudh-777/ttl/internal/model"
 )
 
 // startCmd begins a timer on a task (or with no task for a "blank" timer).

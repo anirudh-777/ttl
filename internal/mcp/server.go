@@ -31,8 +31,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/anirudhprakash/ttl/internal/client"
-	"github.com/anirudhprakash/ttl/internal/config"
+	"github.com/anirudh-777/ttl/internal/client"
+	"github.com/anirudh-777/ttl/internal/config"
 )
 
 // Run starts the MCP server on os.Stdin/Stdout. Blocks until EOF.

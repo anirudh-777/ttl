@@ -17,9 +17,9 @@ import (
 	"github.com/charmbracelet/x/term"
 	"github.com/spf13/cobra"
 
-	"github.com/anirudhprakash/ttl/internal/client"
-	"github.com/anirudhprakash/ttl/internal/config"
-	"github.com/anirudhprakash/ttl/internal/fmtcmd"
+	"github.com/anirudh-777/ttl/internal/client"
+	"github.com/anirudh-777/ttl/internal/config"
+	"github.com/anirudh-777/ttl/internal/fmtcmd"
 )
 
 var (
@@ -582,7 +582,7 @@ func exitError(format string, args ...any) {
 // init wires all commands and persistent flags.
 func init() {
 	// Global flags on root.
-	rootCmd.PersistentFlags().StringVar(&flagFormat, "format", "text", "output format: text|json|ndjson")
+	rootCmd.PersistentFlags().StringVarP(&flagFormat, "format", "o", "text", "output format: text|json|ndjson")
 	rootCmd.PersistentFlags().StringVar(&flagServer, "server", "", "override server URL for this command")
 
 	// Subcommand wiring.

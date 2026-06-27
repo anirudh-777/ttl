@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/anirudhprakash/ttl/internal/store"
-	"github.com/anirudhprakash/ttl/internal/tenant"
+	"github.com/anirudh-777/ttl/internal/store"
+	"github.com/anirudh-777/ttl/internal/tenant"
 )
 
 func TestStartStopTimer(t *testing.T) {

@@ -20,8 +20,8 @@ import (
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/anirudhprakash/ttl/internal/model"
-	"github.com/anirudhprakash/ttl/internal/tenant"
+	"github.com/anirudh-777/ttl/internal/model"
+	"github.com/anirudh-777/ttl/internal/tenant"
 )
 
 // Errors callers can check.

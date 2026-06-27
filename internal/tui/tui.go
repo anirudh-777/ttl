@@ -26,8 +26,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/anirudhprakash/ttl/internal/client"
-	"github.com/anirudhprakash/ttl/internal/model"
+	"github.com/anirudh-777/ttl/internal/client"
+	"github.com/anirudh-777/ttl/internal/model"
 )
 
 // View selects the initial filter.

@@ -86,12 +86,12 @@ Open <http://localhost:8093/login> for the web UI.
 
 ```bash
 # from source
-git clone https://github.com/anirudhprakash/ttl
+git clone https://github.com/anirudh-777/ttl
 cd ttl
 make build
 
 # or download a release
-curl -L https://github.com/anirudhprakash/ttl/releases/latest/download/ttl-darwin-arm64 -o ttl
+curl -L https://github.com/anirudh-777/ttl/releases/latest/download/ttl-darwin-arm64 -o ttl
 chmod +x ttl
 
 # homebrew (when published)

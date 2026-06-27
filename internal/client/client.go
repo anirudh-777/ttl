@@ -18,7 +18,7 @@ import (
 
 	"golang.org/x/net/publicsuffix"
 
-	"github.com/anirudhprakash/ttl/internal/model"
+	"github.com/anirudh-777/ttl/internal/model"
 )
 
 // Client is a tiny typed wrapper over net/http.

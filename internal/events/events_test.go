@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/anirudhprakash/ttl/internal/events"
+	"github.com/anirudh-777/ttl/internal/events"
 )
 
 func TestPublishSubscribe(t *testing.T) {

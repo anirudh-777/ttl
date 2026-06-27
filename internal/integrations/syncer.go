@@ -13,9 +13,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/anirudhprakash/ttl/internal/model"
-	"github.com/anirudhprakash/ttl/internal/store"
-	"github.com/anirudhprakash/ttl/internal/tenant"
+	"github.com/anirudh-777/ttl/internal/model"
+	"github.com/anirudh-777/ttl/internal/store"
+	"github.com/anirudh-777/ttl/internal/tenant"
 )
 
 // Syncer reconciles external issues with ttl tasks.

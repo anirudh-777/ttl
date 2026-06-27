@@ -16,13 +16,13 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/anirudhprakash/ttl/internal/api"
-	"github.com/anirudhprakash/ttl/internal/client"
-	"github.com/anirudhprakash/ttl/internal/config"
-	"github.com/anirudhprakash/ttl/internal/db"
-	"github.com/anirudhprakash/ttl/internal/events"
-	"github.com/anirudhprakash/ttl/internal/store"
-	"github.com/anirudhprakash/ttl/internal/tui"
+	"github.com/anirudh-777/ttl/internal/api"
+	"github.com/anirudh-777/ttl/internal/client"
+	"github.com/anirudh-777/ttl/internal/config"
+	"github.com/anirudh-777/ttl/internal/db"
+	"github.com/anirudh-777/ttl/internal/events"
+	"github.com/anirudh-777/ttl/internal/store"
+	"github.com/anirudh-777/ttl/internal/tui"
 )
 
 // todayCmd opens the today TUI.

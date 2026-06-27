@@ -12,8 +12,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/teambition/rrule-go"
 
-	"github.com/anirudhprakash/ttl/internal/model"
-	"github.com/anirudhprakash/ttl/internal/tenant"
+	"github.com/anirudh-777/ttl/internal/model"
+	"github.com/anirudh-777/ttl/internal/tenant"
 )
 
 // ErrInvalidRRule is returned when a recurrence_rrule string is malformed.

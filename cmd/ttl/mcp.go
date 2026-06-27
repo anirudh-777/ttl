@@ -7,7 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/anirudhprakash/ttl/internal/mcp"
+	"github.com/anirudh-777/ttl/internal/mcp"
 )
 
 // mcpCmd starts the MCP server on stdio.

@@ -1,4 +1,4 @@
-module github.com/anirudhprakash/ttl
+module github.com/anirudh-777/ttl
 
 go 1.25.0
 

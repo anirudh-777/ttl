@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/anirudhprakash/ttl/internal/model"
-	"github.com/anirudhprakash/ttl/internal/store"
-	"github.com/anirudhprakash/ttl/internal/tenant"
+	"github.com/anirudh-777/ttl/internal/model"
+	"github.com/anirudh-777/ttl/internal/store"
+	"github.com/anirudh-777/ttl/internal/tenant"
 )
 
 func TestRecurringTaskDaily(t *testing.T) {

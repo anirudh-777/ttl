@@ -3,7 +3,7 @@ package ws
 import (
 	"encoding/json"
 
-	"github.com/anirudhprakash/ttl/internal/events"
+	"github.com/anirudh-777/ttl/internal/events"
 )
 
 func jsonMarshal(e events.Event) ([]byte, error) {

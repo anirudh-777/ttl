@@ -11,8 +11,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/anirudhprakash/ttl/internal/model"
-	"github.com/anirudhprakash/ttl/internal/tenant"
+	"github.com/anirudh-777/ttl/internal/model"
+	"github.com/anirudh-777/ttl/internal/tenant"
 )
 
 // CreateIntegration persists a new tenant-scoped integration.

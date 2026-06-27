@@ -26,12 +26,12 @@ import (
 
 	"database/sql"
 
-	"github.com/anirudhprakash/ttl/internal/auth"
-	"github.com/anirudhprakash/ttl/internal/events"
-	"github.com/anirudhprakash/ttl/internal/model"
-	"github.com/anirudhprakash/ttl/internal/store"
-	"github.com/anirudhprakash/ttl/internal/tenant"
-	"github.com/anirudhprakash/ttl/internal/ws"
+	"github.com/anirudh-777/ttl/internal/auth"
+	"github.com/anirudh-777/ttl/internal/events"
+	"github.com/anirudh-777/ttl/internal/model"
+	"github.com/anirudh-777/ttl/internal/store"
+	"github.com/anirudh-777/ttl/internal/tenant"
+	"github.com/anirudh-777/ttl/internal/ws"
 )
 
 // Server bundles dependencies for HTTP handlers.

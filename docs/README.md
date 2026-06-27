@@ -13,5 +13,5 @@
 ## Quick links
 
 - Web UI: <http://localhost:8093/login> (after `ttl serve`)
-- GitHub: <https://github.com/anirudhprakash/ttl>
+- GitHub: <https://github.com/anirudh-777/ttl>
 - MCP spec: <https://modelcontextprotocol.io>
