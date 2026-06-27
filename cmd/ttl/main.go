@@ -17,6 +17,8 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+
+	"github.com/anirudh-777/ttl/internal/update"
 )
 
 var (
@@ -56,13 +58,21 @@ func defaultArgs(argv []string) []string {
 	// Recognised top-level commands. Anything else (e.g. "task", "project")
 	// is routed under "cli".
 	switch argv[0] {
-	case "cli", "serve", "today", "inbox", "mcp", "version", "help", "-h", "--help":
+	case "cli", "serve", "today", "inbox", "mcp", "version", "update", "help", "-h", "--help":
 		return argv
 	}
 	return append([]string{"cli"}, argv...)
 }
 
 func main() {
+	// Print the one-line update notice on stderr before doing anything
+	// else, so it surfaces in CI logs and shell sessions alike.
+	// Skip the notice when running `ttl update` itself (no point
+	// telling the user about an update mid-update).
+	if len(os.Args) < 2 || os.Args[1] != "update" {
+		update.MaybeNotice(version, 0)
+	}
+
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, "ttl:", err)
 		os.Exit(1)
