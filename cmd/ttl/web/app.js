@@ -54,12 +54,16 @@
   function renderTask(t) {
     const tags = (t.tags || []).map((n) => '<span class="tag">' + escapeHTML(n) + '</span>').join('');
     const cls = t.status === 'done' ? 'title done' : 'title';
+    // Layout: [checkbox] [pri] [title + meta] [del]
+    // Title and meta share a column that wraps on narrow screens.
     return `
       <li data-id="${t.id}">
         <input type="checkbox" ${t.status === 'done' ? 'checked' : ''} data-act="toggle">
-        ${priLabel(t.priority)}
-        <span class="${cls}">${escapeHTML(t.title)}</span>
-        <span class="meta">${fmtDue(t.due_at)} ${tags}</span>
+        <span class="pri">${priLabel(t.priority)}</span>
+        <div class="body">
+          <span class="${cls}">${escapeHTML(t.title)}</span>
+          <span class="meta">${fmtDue(t.due_at)} ${tags}</span>
+        </div>
         <button class="del" data-act="del" title="delete">x</button>
       </li>`;
   }
@@ -139,7 +143,7 @@
     // Tick the elapsed counter every second.
     const at = root.querySelector('#active-timer');
     if (at) {
-      const started = parseInt(at.dataset.started, 10);
+      const started = new Date(at.dataset.started).getTime();
       const span = at.querySelector('.elapsed');
       setInterval(() => {
         if (!span) return;

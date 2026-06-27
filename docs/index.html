@@ -1,0 +1,566 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="description" content="ttl — terminal-first, multi-tenant task tracker. One static binary that ships a CLI, TUI, web UI, REST API, WebSocket live updates, and an MCP server for AI agents.">
+<meta property="og:title" content="ttl — terminal-first task tracker">
+<meta property="og:description" content="One static Go binary. CLI, TUI, web UI, REST API, MCP. SQLite + WAL, no CGO, row-level multi-tenancy.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://anirudh-777.github.io/ttl/">
+<title>ttl — terminal-first task tracker</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%232a6f4a'/%3E%3Ctext x='32' y='44' text-anchor='middle' font-family='ui-monospace,monospace' font-weight='700' font-size='34' fill='%23fdfdfb'%3Ettl%3C/text%3E%3C/svg%3E">
+<style>
+  :root {
+    --fg: #1a1a1a;
+    --muted: #6b6b6b;
+    --bg: #fdfdfb;
+    --bg-alt: #f4f4ef;
+    --accent: #2a6f4a;
+    --accent-soft: #d8ebde;
+    --border: #ececec;
+    --code-bg: #f4f4ef;
+    --kbd-bg: #f0f0eb;
+    --link: #2a6f4a;
+    --max: 1100px;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --fg: #ececec;
+      --muted: #8b8b8b;
+      --bg: #0e0e0e;
+      --bg-alt: #161616;
+      --accent: #7dbe9b;
+      --accent-soft: #1c2a23;
+      --border: #262626;
+      --code-bg: #1a1a1a;
+      --kbd-bg: #1d1d1d;
+      --link: #7dbe9b;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--link); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code, kbd {
+    font-family: var(--mono);
+    font-size: .9em;
+  }
+  :not(pre) > code {
+    background: var(--code-bg);
+    padding: .12em .38em;
+    border-radius: 3px;
+  }
+  pre {
+    margin: 1rem 0;
+    padding: .9rem 1rem;
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow-x: auto;
+    line-height: 1.5;
+    font-size: .88rem;
+  }
+  pre code { background: none; padding: 0; font-size: inherit; }
+
+  /* ---------- Nav ---------- */
+  .nav {
+    position: sticky; top: 0; z-index: 10;
+    backdrop-filter: saturate(180%) blur(8px);
+    -webkit-backdrop-filter: saturate(180%) blur(8px);
+    background: color-mix(in srgb, var(--bg) 85%, transparent);
+    border-bottom: 1px solid var(--border);
+  }
+  .nav-inner {
+    max-width: var(--max);
+    margin: 0 auto;
+    padding: .8rem 1.25rem;
+    display: flex; align-items: center; gap: 1.5rem;
+  }
+  .nav-brand {
+    display: flex; align-items: baseline; gap: .55rem;
+    font-weight: 700; font-size: 1.1rem; letter-spacing: -.01em;
+    color: var(--fg);
+  }
+  .nav-brand .dot {
+    display: inline-block;
+    width: .65rem; height: .65rem;
+    border-radius: 50%;
+    background: var(--accent);
+    transform: translateY(-1px);
+  }
+  .nav-links {
+    display: flex; gap: 1.25rem; flex: 1;
+    font-size: .92rem;
+  }
+  .nav-links a { color: var(--muted); }
+  .nav-links a:hover { color: var(--fg); text-decoration: none; }
+  .nav-cta {
+    display: inline-flex; align-items: center; gap: .4rem;
+    padding: .4rem .85rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: .88rem;
+    color: var(--fg);
+    background: var(--bg);
+  }
+  .nav-cta:hover { border-color: var(--accent); text-decoration: none; }
+
+  /* ---------- Hero ---------- */
+  .hero {
+    max-width: var(--max);
+    margin: 0 auto;
+    padding: 5rem 1.25rem 4rem;
+    text-align: center;
+  }
+  .hero h1 {
+    margin: 0 0 1rem;
+    font-size: clamp(2.4rem, 6vw, 4rem);
+    line-height: 1.05;
+    letter-spacing: -.03em;
+    font-weight: 800;
+  }
+  .hero h1 .accent { color: var(--accent); }
+  .hero p.lede {
+    margin: 0 auto 2rem;
+    max-width: 38rem;
+    font-size: clamp(1.05rem, 1.4vw, 1.2rem);
+    color: var(--muted);
+  }
+  .hero-ctas {
+    display: inline-flex; flex-wrap: wrap; gap: .6rem;
+    justify-content: center;
+    margin-bottom: 2.5rem;
+  }
+  .btn {
+    display: inline-flex; align-items: center; gap: .5rem;
+    padding: .65rem 1.15rem;
+    border-radius: 6px;
+    font-size: .95rem;
+    font-weight: 600;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: filter .15s, border-color .15s;
+  }
+  .btn:hover { filter: brightness(.95); text-decoration: none; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-secondary { background: var(--bg); color: var(--fg); border-color: var(--border); }
+  .btn-secondary:hover { border-color: var(--accent); }
+
+  /* ---------- Install box ---------- */
+  .install {
+    max-width: 38rem;
+    margin: 0 auto;
+    text-align: left;
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: .25rem;
+  }
+  .install-tabs {
+    display: flex; gap: .25rem; padding: .35rem .35rem 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .install-tab {
+    background: none; border: 0; padding: .45rem .85rem;
+    font: inherit; font-size: .85rem;
+    color: var(--muted); cursor: pointer;
+    border-radius: 4px 4px 0 0;
+  }
+  .install-tab[aria-selected="true"] {
+    color: var(--fg);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-bottom-color: var(--bg);
+    margin-bottom: -1px;
+  }
+  .install pre {
+    margin: 0;
+    border: 0; border-radius: 0 0 7px 7px;
+    background: transparent;
+    padding: .9rem 1rem;
+    font-size: .85rem;
+    display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+  }
+  .install pre code { white-space: pre; }
+  .copy-btn {
+    background: transparent; border: 1px solid var(--border);
+    color: var(--muted);
+    font: inherit; font-size: .75rem;
+    padding: .25rem .55rem; border-radius: 4px;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .copy-btn:hover { color: var(--fg); border-color: var(--accent); }
+  .copy-btn.copied { color: var(--accent); border-color: var(--accent); }
+
+  /* ---------- Sections ---------- */
+  section { padding: 4rem 1.25rem; }
+  .section-inner { max-width: var(--max); margin: 0 auto; }
+  .section-title {
+    text-align: center;
+    margin: 0 0 .5rem;
+    font-size: clamp(1.6rem, 3vw, 2.1rem);
+    letter-spacing: -.02em;
+    font-weight: 700;
+  }
+  .section-sub {
+    text-align: center;
+    color: var(--muted);
+    margin: 0 auto 2.5rem;
+    max-width: 36rem;
+  }
+
+  /* ---------- Feature grid ---------- */
+  .features {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 1rem;
+  }
+  .feature {
+    padding: 1.25rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg);
+  }
+  .feature .icon {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 2.2rem; height: 2.2rem;
+    border-radius: 6px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-family: var(--mono); font-weight: 700;
+    margin-bottom: .8rem;
+  }
+  .feature h3 {
+    margin: 0 0 .35rem;
+    font-size: 1rem;
+    font-weight: 600;
+  }
+  .feature p {
+    margin: 0;
+    color: var(--muted);
+    font-size: .92rem;
+    line-height: 1.55;
+  }
+
+  /* ---------- Surfaces ---------- */
+  .surfaces {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: .75rem;
+  }
+  .surface {
+    padding: 1rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg);
+    display: flex; flex-direction: column; gap: .35rem;
+  }
+  .surface .name {
+    font-family: var(--mono); font-size: .82rem;
+    color: var(--accent); font-weight: 600;
+  }
+  .surface .desc { font-size: .88rem; color: var(--muted); }
+
+  /* ---------- Demo ---------- */
+  .demo-frame {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--bg-alt);
+    overflow: hidden;
+    box-shadow: 0 12px 40px -8px color-mix(in srgb, var(--fg) 18%, transparent),
+                0 2px 6px -2px color-mix(in srgb, var(--fg) 8%, transparent);
+  }
+  .demo-frame img {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+  .demo-caption {
+    text-align: center;
+    margin: 1rem auto 0;
+    max-width: 640px;
+    color: var(--muted);
+    font-size: .9rem;
+  }
+  .demo-caption code {
+    background: var(--code-bg);
+    padding: .1em .35em;
+    border-radius: 3px;
+    font-size: .85em;
+  }
+
+  /* ---------- Stack ---------- */
+  .stack {
+    display: flex; flex-wrap: wrap; gap: .5rem;
+    justify-content: center;
+  }
+  .stack .badge {
+    padding: .35rem .8rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--bg);
+    font-size: .85rem;
+    color: var(--muted);
+  }
+  .stack .badge b { color: var(--fg); font-weight: 600; }
+
+  /* ---------- Integrations ---------- */
+  .integrations {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 1rem;
+    max-width: 640px;
+    margin: 0 auto;
+  }
+  .integration {
+    padding: 1.25rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg);
+    text-align: center;
+  }
+  .integration .name {
+    font-weight: 600; font-size: 1.05rem;
+    margin-bottom: .35rem;
+  }
+  .integration .desc {
+    color: var(--muted); font-size: .88rem;
+  }
+
+  /* ---------- Footer ---------- */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 2.5rem 1.25rem;
+    margin-top: 4rem;
+    color: var(--muted);
+    font-size: .88rem;
+    text-align: center;
+  }
+  footer .links {
+    display: flex; gap: 1.25rem; justify-content: center;
+    margin-bottom: .8rem; flex-wrap: wrap;
+  }
+  footer .links a { color: var(--muted); }
+  footer .links a:hover { color: var(--fg); text-decoration: none; }
+  footer .meta { font-size: .82rem; }
+
+  /* ---------- Print ---------- */
+  @media print {
+    body { background: white; color: black; }
+    .nav, .hero-ctas, .install, .copy-btn, footer .links { display: none; }
+    pre, :not(pre) > code { background: #f5f5f5; color: black; border-color: #ddd; }
+  }
+
+  /* ---------- Responsive ---------- */
+  @media (max-width: 600px) {
+    .nav-links { display: none; }
+    .hero { padding: 3rem 1.25rem 2rem; }
+    section { padding: 2.5rem 1.25rem; }
+  }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-inner">
+    <a class="nav-brand" href="#top"><span class="dot"></span>ttl</a>
+    <div class="nav-links">
+      <a href="#surfaces">Surfaces</a>
+      <a href="#features">Features</a>
+      <a href="#integrations">Integrations</a>
+      <a href="guide.html">Guide</a>
+    </div>
+    <a class="nav-cta" href="https://github.com/anirudh-777/ttl">GitHub &rarr;</a>
+  </div>
+</nav>
+
+<header class="hero" id="top">
+  <h1>The task tracker that<br>stays out of <span class="accent">your way</span>.</h1>
+  <p class="lede">A single static Go binary (~13&nbsp;MB) that ships a CLI, TUI, web UI, REST API, WebSocket live updates, and an MCP server for AI agents. SQLite + WAL, no CGO, row-level multi-tenancy.</p>
+  <div class="hero-ctas">
+    <a class="btn btn-primary" href="#install">Install</a>
+    <a class="btn btn-secondary" href="#features">What it does</a>
+    <a class="btn btn-secondary" href="https://github.com/anirudh-777/ttl">View on GitHub</a>
+  </div>
+
+  <div class="install" id="install">
+    <div class="install-tabs" role="tablist">
+      <button class="install-tab" data-target="mac" role="tab" aria-selected="true">macOS / Linux</button>
+      <button class="install-tab" data-target="brew" role="tab" aria-selected="false">Homebrew</button>
+      <button class="install-tab" data-target="build" role="tab" aria-selected="false">From source</button>
+    </div>
+    <pre id="cmd-mac"><code>curl -L https://github.com/anirudh-777/ttl/releases/latest/download/ttl-$(uname -s | tr A-Z a-z)-$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/') -o ttl && chmod +x ttl && sudo mv ttl /usr/local/bin/</code><button class="copy-btn" data-copy="cmd-mac">copy</button></pre>
+    <pre id="cmd-brew" hidden><code># coming soon — brew tap anirudh-777/ttl</code><button class="copy-btn" data-copy="cmd-brew">copy</button></pre>
+    <pre id="cmd-build" hidden><code>git clone https://github.com/anirudh-777/ttl &amp;&amp; cd ttl &amp;&amp; make build</code><button class="copy-btn" data-copy="cmd-build">copy</button></pre>
+  </div>
+</header>
+
+<section id="surfaces">
+  <div class="section-inner">
+    <h2 class="section-title">Six surfaces, one binary</h2>
+    <p class="section-sub">Use whatever fits the moment: terminal at your desk, browser on your phone, an MCP tool call from your agent.</p>
+    <div class="surfaces">
+      <div class="surface"><span class="name">CLI</span><span class="desc">Fast capture, scripts, JSON / NDJSON for piping into <code>jq</code>.</span></div>
+      <div class="surface"><span class="name">TUI</span><span class="desc">Bubble Tea today/inbox views. vim-style keys, runs over SSH.</span></div>
+      <div class="surface"><span class="name">Web UI</span><span class="desc">Embedded SPA. Today, inbox, projects, settings. No build step.</span></div>
+      <div class="surface"><span class="name">REST API</span><span class="desc">Stable <code>/api/v1</code> surface, session cookie or <code>X-API-Key</code>.</span></div>
+      <div class="surface"><span class="name">MCP server</span><span class="desc">10 tools over stdio for Claude, Cursor, Cline, and friends.</span></div>
+      <div class="surface"><span class="name">WebSocket</span><span class="desc">Live updates on <code>/api/v1/ws</code> for the TUI and web UI.</span></div>
+    </div>
+  </div>
+</section>
+
+<section id="features" style="background: var(--bg-alt); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);">
+  <div class="section-inner">
+    <h2 class="section-title">Built for speed and keyboard</h2>
+    <p class="section-sub">No Electron. No Angular. No Docker required. Just a single static binary you can drop on a server and forget about.</p>
+    <div class="features">
+      <div class="feature">
+        <div class="icon">M</div>
+        <h3>Multi-tenant by design</h3>
+        <p>Every row is scoped by <code>tenant_id</code> at the storage layer. Cross-tenant access is structurally impossible, not just policy.</p>
+      </div>
+      <div class="feature">
+        <div class="icon">T</div>
+        <h3>Timers + Pomodoro</h3>
+        <p>Start/stop a work timer on any task. Run a 25-minute pomodoro. Get a per-day worklog broken down by task.</p>
+      </div>
+      <div class="feature">
+        <div class="icon">R</div>
+        <h3>Recurring tasks</h3>
+        <p>iCalendar RRULE. Mark a weekly standup done and the next occurrence spawns automatically.</p>
+      </div>
+      <div class="feature">
+        <div class="icon">!</div>
+        <h3>Reminders</h3>
+        <p>Schedule a fire-at timestamp. Background ticker publishes to the WebSocket hub and fires a best-effort OS notification.</p>
+      </div>
+      <div class="feature">
+        <div class="icon">A</div>
+        <h3>AI-native</h3>
+        <p>Stable REST API, NDJSON streaming, MCP server. Programmable from any language, native to every major agent.</p>
+      </div>
+      <div class="feature">
+        <div class="icon">$</div>
+        <h3>One file, one process</h3>
+        <p>SQLite + WAL handles hundreds of writes per second. Back up with <code>cp</code>. No services to register.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="section-inner">
+    <h2 class="section-title">See it in action</h2>
+    <p class="section-sub">Same UI as <code>ttl</code> on the wire. The web client is ~12 KB of vanilla JS — no build step, no framework.</p>
+    <figure class="demo-frame">
+      <img src="assets/hero-2up.png" alt="ttl web UI: Inbox with seven open tasks on the left, Today view with an active timer and worklog on the right" loading="lazy" decoding="async" width="2200" height="900">
+    </figure>
+    <p class="demo-caption">Inbox shows all root-level open tasks. Today filters to what's due, plus an active timer banner and per-day worklog from <code>/api/v1/worklog/today</code>.</p>
+  </div>
+</section>
+
+<section id="integrations" style="background: var(--bg-alt); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);">
+  <div class="section-inner">
+    <h2 class="section-title">Pull issues from your tracker</h2>
+    <p class="section-sub">GitHub and Linear today. Same provider interface — adding Jira or Shortcut is one struct.</p>
+    <div class="integrations">
+      <div class="integration">
+        <div class="name">GitHub</div>
+        <div class="desc">Personal Access Token, REST <code>/issues</code> with HMAC-verified webhooks.</div>
+      </div>
+      <div class="integration">
+        <div class="name">Linear</div>
+        <div class="desc">GraphQL <code>assignedIssues</code> via Personal API Key. Two-way sync.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="section-inner">
+    <h2 class="section-title">Stack</h2>
+    <p class="section-sub">Boring, fast, single static binary.</p>
+    <div class="stack">
+      <span class="badge"><b>Go 1.22+</b></span>
+      <span class="badge"><b>SQLite</b> (modernc, no CGO)</span>
+      <span class="badge"><b>charm.sh/bubbletea</b></span>
+      <span class="badge"><b>go-chi/chi</b></span>
+      <span class="badge"><b>spf13/cobra</b></span>
+      <span class="badge"><b>coder/websocket</b></span>
+      <span class="badge"><b>teambition/rrule-go</b></span>
+      <span class="badge"><b>Vanilla JS</b> (~12 KB, no build)</span>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="links">
+    <a href="https://github.com/anirudh-777/ttl">GitHub</a>
+    <a href="https://github.com/anirudh-777/ttl/blob/main/README.md">README</a>
+    <a href="guide.html">Guide</a>
+    <a href="https://github.com/anirudh-777/ttl/blob/main/docs/architecture.md">Architecture</a>
+    <a href="https://github.com/anirudh-777/ttl/blob/main/docs/api.md">API</a>
+    <a href="https://github.com/anirudh-777/ttl/blob/main/docs/mcp.md">MCP</a>
+    <a href="https://github.com/anirudh-777/ttl/releases">Releases</a>
+  </div>
+  <div class="meta">MIT License &middot; made by humans, for humans <em>and</em> agents</div>
+</footer>
+
+<script>
+  // Install tab switcher.
+  const tabs = document.querySelectorAll('.install-tab');
+  const panels = {
+    mac: document.getElementById('cmd-mac'),
+    brew: document.getElementById('cmd-brew'),
+    build: document.getElementById('cmd-build'),
+  };
+  tabs.forEach(t => {
+    t.addEventListener('click', () => {
+      tabs.forEach(x => x.setAttribute('aria-selected', x === t ? 'true' : 'false'));
+      Object.entries(panels).forEach(([k, el]) => { el.hidden = k !== t.dataset.target; });
+    });
+  });
+
+  // Copy buttons.
+  document.querySelectorAll('.copy-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const panel = document.getElementById(btn.dataset.copy);
+      const code = panel.querySelector('code').textContent;
+      try {
+        await navigator.clipboard.writeText(code);
+        const old = btn.textContent;
+        btn.textContent = 'copied';
+        btn.classList.add('copied');
+        setTimeout(() => { btn.textContent = old; btn.classList.remove('copied'); }, 1400);
+      } catch {
+        // Fallback: select the text in the code element.
+        const range = document.createRange();
+        range.selectNodeContents(panel.querySelector('code'));
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+      }
+    });
+  });
+</script>
+
+</body>
+</html>

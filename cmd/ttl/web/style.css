@@ -61,13 +61,18 @@ h1, h2, h3 { margin: 0.4em 0; }
 
 ul.tasklist { list-style: none; padding: 0; margin: 0; }
 ul.tasklist li {
-  display: flex; align-items: center; gap: 0.6rem;
+  display: flex; align-items: flex-start; gap: 0.6rem;
   padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--line);
 }
 ul.tasklist li:hover { background: #222; }
-ul.tasklist .title { flex: 1; }
+ul.tasklist .body {
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column; gap: 0.15rem;
+}
+ul.tasklist .pri { width: 1.5rem; flex-shrink: 0; text-align: center; padding-top: 0.15rem; }
+ul.tasklist .title { word-break: break-word; }
 ul.tasklist .title.done { text-decoration: line-through; color: var(--muted); }
-ul.tasklist .meta { color: var(--muted); font-size: 0.85em; }
+ul.tasklist .meta { color: var(--muted); font-size: 0.85em; display: flex; gap: 0.4rem; flex-wrap: wrap; align-items: center; }
 ul.tasklist .pri-high { color: var(--pri-high); }
 ul.tasklist .pri-med  { color: var(--pri-med); }
 ul.tasklist .pri-low  { color: var(--pri-low); }
@@ -75,9 +80,16 @@ ul.tasklist .due-overdue { color: var(--err); }
 ul.tasklist .due-today { color: var(--warn); }
 ul.tasklist .tag {
   display: inline-block; background: var(--line); padding: 1px 6px;
-  border-radius: 8px; margin-right: 4px; font-size: 0.8em;
+  border-radius: 8px; font-size: 0.8em;
 }
-ul.tasklist button.del { background: transparent; color: var(--err); padding: 2px 6px; }
+ul.tasklist button.del {
+  background: transparent; color: var(--err); padding: 2px 6px;
+  flex-shrink: 0; align-self: center;
+}
+ul.tasklist input[type="checkbox"] {
+  flex-shrink: 0; margin-top: 0.2rem;
+  width: auto;
+}
 
 .active-timer {
   display: flex; align-items: center; gap: 0.6rem;
