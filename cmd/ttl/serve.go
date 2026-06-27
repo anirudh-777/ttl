@@ -97,8 +97,8 @@ var serveCmd = &cobra.Command{
 		}()
 
 		fmt.Fprintf(cmd.OutOrStdout(),
-			"ttl server %s (built %s) listening on %s (db=%s)\n",
-			buildVersion, buildTime, addr, dbPath)
+			"ttl server %s (commit %s, built %s) listening on %s (db=%s)\n",
+			version, commit, date, addr, dbPath)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			return err
 		}
@@ -200,13 +200,6 @@ func loadConfigClient() *client.Client {
 	return client.New(useConfigServer(), "")
 }
 
-// buildVersion is overridable at link time: -ldflags "-X main.buildVersion=0.4.0".
-// buildTime is set the same way (or defaults to compile time).
-var (
-	buildVersion = "dev"
-	buildTime    = time.Now().UTC().Format(time.RFC3339)
-)
-
 // versionHandler returns build metadata so a user can verify which
 // binary their browser is talking to (essential when troubleshooting
 // stale caches).
@@ -215,6 +208,6 @@ func versionHandler() http.Handler {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Cache-Control", "no-store")
 		fmt.Fprintf(w, `{"version":%q,"built":%q,"go":%q}`+"\n",
-			buildVersion, buildTime, runtime.Version())
+			version, date, runtime.Version())
 	})
 }
