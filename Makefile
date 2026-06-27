@@ -48,6 +48,17 @@ clean:
 run-server: build
 	./bin/ttl serve --addr :8093
 
+# Install the freshly-built binary onto PATH.
+# Honours PREFIX (default /usr/local). For a user-local install:
+#   make install PREFIX=$HOME/.local
+.PHONY: install
+install: build
+	install -m 0755 bin/ttl $(PREFIX)/bin/ttl
+
+.PHONY: uninstall
+uninstall:
+	rm -f $(PREFIX)/bin/ttl
+
 .PHONY: precommit-install
 precommit-install:
 	@command -v pre-commit >/dev/null 2>&1 || { \
