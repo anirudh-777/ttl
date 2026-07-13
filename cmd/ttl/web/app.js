@@ -44,6 +44,11 @@
     return d.toISOString().slice(5, 10);
   }
 
+  function fmtCompleted(completedAt) {
+    if (!completedAt) return '';
+    return 'completed at ' + new Date(completedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+
   function localDateValue(d) {
     const date = d || new Date();
     const offset = date.getTimezoneOffset() * 60000;
@@ -61,8 +66,9 @@
     return '';
   }
 
-  function renderTask(t) {
+  function renderTask(t, context) {
     const tags = (t.tags || []).map((n) => '<span class="tag">' + escapeHTML(n) + '</span>').join('');
+    const timing = context === 'completed' ? fmtCompleted(t.completed_at) : fmtDue(t.due_at);
     const cls = t.status === 'done' ? 'title done' : 'title';
     // Layout: [checkbox] [pri] [title + meta] [del]
     // Title and meta share a column that wraps on narrow screens.
@@ -76,7 +82,7 @@
         <span class="pri">${priLabel(t.priority)}</span>
         <div class="body">
           <button class="task-title-button ${cls}" data-act="edit">${escapeHTML(t.title)}</button>
-          <span class="meta">${fmtDue(t.due_at)} ${tags}</span>
+          <span class="meta">${timing} ${tags}</span>
         </div>
         ${actions}
       </li>`;
@@ -373,7 +379,7 @@
         if (completedToday.length === 0) {
           completedHost.innerHTML = '<div class="empty">No tasks completed yet today.</div>';
         } else {
-          completedHost.innerHTML = '<ul class="tasklist">' + completedToday.map(renderTask).join('') + '</ul>';
+          completedHost.innerHTML = '<ul class="tasklist">' + completedToday.map((t) => renderTask(t, 'completed')).join('') + '</ul>';
           wireList(completedHost);
         }
         highlightNav('today');
