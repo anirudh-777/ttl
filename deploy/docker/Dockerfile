@@ -16,14 +16,14 @@ ARG COMMIT=none
 ARG DATE=unknown
 RUN CGO_ENABLED=0 go build -trimpath \
     -ldflags="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.date=${DATE}" \
-    -o /out/ttl ./cmd/ttl && \
-    mkdir /out/data
+    -o /out/ttl ./cmd/ttl
 
 FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=build /out/ttl /usr/local/bin/ttl
-COPY --from=build --chown=nonroot:nonroot /out/data /data
 ENV TTL_DATA_DIR=/data
 EXPOSE 8093
-USER nonroot:nonroot
+# Named volumes are created root-owned by Docker/Swarm. The distroless image
+# has no init process that can fix ownership before dropping privileges.
+USER root:root
 ENTRYPOINT ["/usr/local/bin/ttl"]
 CMD ["serve", "--addr", ":8093", "--db", "/data/ttl.db"]
