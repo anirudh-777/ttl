@@ -31,7 +31,7 @@ What this does:
 
 ```bash
 # Pin a specific version
-curl -sSL .../install.sh | bash -s -- --version v1.0.1
+curl -sSL .../install.sh | bash -s -- --version v1.1.0
 
 # User-local install (no sudo)
 curl -sSL .../install.sh | bash -s -- --to ~/.local/bin
@@ -51,12 +51,12 @@ curl -sSL .../install.sh | bash -s -- --print-checksum
 
 ```bash
 ttl version
-# ttl v1.0.1 (commit ..., built ...)
+# ttl v1.1.0 (commit ..., built ...)
 
 # and the server's built-in version endpoint
 ttl serve &
 curl -s http://localhost:8093/version
-# {"version":"v1.0.1","built":"...","go":"go1.25.0"}
+# {"version":"v1.1.0","built":"...","go":"go1.25.0"}
 ```
 
 ## 2. `go install`
@@ -66,7 +66,7 @@ If you have Go 1.25+:
 ```bash
 go install github.com/anirudh-777/ttl/cmd/ttl@latest
 # or pin:
-go install github.com/anirudh-777/ttl/cmd/ttl@v1.0.1
+go install github.com/anirudh-777/ttl/cmd/ttl@v1.1.0
 ```
 
 The binary lands in `$GOBIN` (default `~/go/bin`). Make sure that's
@@ -118,6 +118,17 @@ Use `--skills-only` to avoid MCP changes, or `--dry-run` to preview them.
 Installs are user-scoped and preserve unrelated files and MCP entries.
 
 See `docs/agents.md` for the full per-agent guide.
+
+## Installing the web app on mobile
+
+Open your deployed ttl URL over HTTPS and sign in. On Android or desktop
+Chrome, use the in-app **Install app** button or the browser's install action.
+On iPhone or iPad, open the Share menu in Safari and choose **Add to Home
+Screen**.
+
+The installed app is the same lightweight web UI served by the ttl binary.
+Only presentation assets are cached; authentication, tasks, timers, and
+analytics always come from your server.
 
 ## Updating
 

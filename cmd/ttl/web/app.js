@@ -9,6 +9,28 @@
   // to the top of this IIFE, so referencing them here works.
   window.ttl = { boot, bootAuth };
 
+  let installPrompt;
+  window.addEventListener('beforeinstallprompt', (event) => {
+    event.preventDefault();
+    installPrompt = event;
+    $$('[data-install-app]').forEach((button) => { button.hidden = false; });
+  });
+  document.addEventListener('click', async (event) => {
+    const button = event.target.closest('[data-install-app]');
+    if (!button || !installPrompt) return;
+    await installPrompt.prompt();
+    await installPrompt.userChoice;
+    installPrompt = null;
+    $$('[data-install-app]').forEach((item) => { item.hidden = true; });
+  });
+  window.addEventListener('appinstalled', () => {
+    installPrompt = null;
+    $$('[data-install-app]').forEach((button) => { button.hidden = true; });
+  });
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js'));
+  }
+
   async function api(method, path, body) {
     const opt = {
       method,

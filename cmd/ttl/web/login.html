@@ -3,7 +3,13 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#1a1a1a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>ttl — sign in</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/icon-180.png">
   <link rel="stylesheet" href="/style.css">
 </head>
 <body class="auth">
@@ -15,6 +21,7 @@
         <button id="show-login" class="secondary">Sign in</button>
         <button id="show-signup">Create workspace</button>
       </div>
+      <button type="button" class="secondary install-app" data-install-app hidden>Install ttl on this device</button>
       <form id="login-form" hidden>
         <label>Email <input name="email" type="email" required></label>
         <label>Password <input name="password" type="password" required></label>

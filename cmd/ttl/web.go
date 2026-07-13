@@ -25,6 +25,9 @@ func webHandler() http.Handler {
 			http.NotFound(w, r)
 			return
 		}
+		if r.URL.Path == "/sw.js" {
+			w.Header().Set("Service-Worker-Allowed", "/")
+		}
 		// Never cache the HTML/JS — we want a server reload to be
 		// picked up on the next browser refresh.
 		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")

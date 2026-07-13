@@ -50,6 +50,8 @@ label > span { display: block; color: var(--muted); font-size: 0.9em; }
 .topbar nav a { color: var(--muted); }
 .topbar nav a.active, .topbar nav a:hover { color: var(--fg); }
 .topbar .user { color: var(--muted); font-size: 0.9em; }
+.install-app { white-space: nowrap; }
+.auth .install-app { width: 100%; margin-top: 1rem; }
 
 main { padding: 1.2rem; max-width: 900px; margin: 0 auto; }
 .page-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
@@ -168,4 +170,5 @@ label small { display: block; color: var(--muted); margin-top: .35rem; }
   .topbar nav { order: 3; flex-basis: 100%; }
   .composer, .focus-controls { flex-direction: column; display: flex; }
   .analytics { grid-template-columns: repeat(2, 1fr); }
+  .topbar .install-app { margin-left: auto; }
 }
