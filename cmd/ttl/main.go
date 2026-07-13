@@ -22,7 +22,7 @@ import (
 )
 
 var (
-	version = "0.4.1"
+	version = "1.0.0"
 	commit  = "none"
 	date    = "unknown"
 )
@@ -41,6 +41,7 @@ func init() {
 	serveCmd.Flags().String("addr", ":8093", "listen address")
 	serveCmd.Flags().String("db", "", "SQLite database path (default ~/.local/share/ttl/ttl.db)")
 	serveCmd.Flags().Duration("reminder-interval", 60*time.Second, "how often to scan for due reminders")
+	serveCmd.Flags().Duration("trash-retention", 30*24*time.Hour, "purge trashed tasks after this duration (0 disables)")
 
 	rootCmd.AddCommand(versionCmd)
 
@@ -58,7 +59,7 @@ func defaultArgs(argv []string) []string {
 	// Recognised top-level commands. Anything else (e.g. "task", "project")
 	// is routed under "cli".
 	switch argv[0] {
-	case "cli", "serve", "today", "inbox", "mcp", "version", "update", "help", "-h", "--help":
+	case "cli", "serve", "today", "inbox", "view", "mcp", "version", "update", "help", "-h", "--help":
 		return argv
 	}
 	return append([]string{"cli"}, argv...)

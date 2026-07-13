@@ -24,6 +24,9 @@ func TestRecurringTaskDaily(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if _, err := st.CreateReminder(ctx, tc, created.ID, due.Add(-time.Hour)); err != nil {
+		t.Fatal(err)
+	}
 
 	// Complete; should spawn tomorrow's occurrence.
 	completed, next, err := st.CompleteTaskAndRecur(ctx, tc, created.ID)
@@ -48,6 +51,29 @@ func TestRecurringTaskDaily(t *testing.T) {
 	delta := next.DueAt.Sub(*completed.DueAt)
 	if delta < 23*time.Hour || delta > 25*time.Hour {
 		t.Errorf("next due_at delta = %v, want ~24h", delta)
+	}
+	reminders, err := st.ListReminders(ctx, tc, "pending", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var inherited bool
+	for _, reminder := range reminders {
+		if reminder.TaskID == next.ID {
+			inherited = true
+			if got := next.DueAt.Sub(reminder.FireAt); got < 59*time.Minute || got > 61*time.Minute {
+				t.Fatalf("relative reminder offset=%v", got)
+			}
+		}
+	}
+	if !inherited {
+		t.Fatal("next occurrence did not inherit relative reminder")
+	}
+	_, duplicate, err := st.CompleteTaskAndRecur(ctx, tc, created.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if duplicate != nil {
+		t.Fatalf("repeated completion spawned duplicate: %+v", duplicate)
 	}
 }
 
@@ -143,5 +169,34 @@ func TestReminderCreateAndFire(t *testing.T) {
 	due2, _ := st.FetchDueReminders(ctx, time.Now())
 	if len(due2) != 0 {
 		t.Errorf("expected 0 due after fetch, got %d", len(due2))
+	}
+}
+
+func TestNotificationEndpointAndReminderDeliveryState(t *testing.T) {
+	d := openTestDB(t)
+	st := store.New(d)
+	ctx := context.Background()
+	u := signup(t, d, "notify@test.local", "Notify")
+	tc := &tenant.Context{TenantID: u.TenantID, UserID: u.ID, Role: u.Role}
+	secret, endpoint, err := st.CreateNotificationEndpoint(ctx, tc, "ops", "https://example.test/reminders")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if secret == "" || endpoint.URL == "" {
+		t.Fatalf("secret=%q endpoint=%+v", secret, endpoint)
+	}
+	items, err := st.ListNotificationEndpoints(ctx, tc)
+	if err != nil || len(items) != 1 {
+		t.Fatalf("items=%v err=%v", items, err)
+	}
+	rawURL, gotSecret, enabled, err := st.NotificationDeliveryConfig(ctx, tc.TenantID, endpoint.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rawURL != endpoint.URL || gotSecret != secret || !enabled {
+		t.Fatalf("config=%q %q %v", rawURL, gotSecret, enabled)
+	}
+	if _, _, err := st.CreateNotificationEndpoint(ctx, tc, "bad", "file:///tmp/hook"); err == nil {
+		t.Fatal("accepted non-http endpoint")
 	}
 }

@@ -14,7 +14,6 @@ package ws
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"net/http"
 	"strings"
 	"time"
@@ -23,6 +22,7 @@ import (
 
 	"github.com/anirudh-777/ttl/internal/auth"
 	"github.com/anirudh-777/ttl/internal/events"
+	"github.com/anirudh-777/ttl/internal/tenant"
 )
 
 // Server wires the events hub into HTTP upgrades.
@@ -51,9 +51,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	c, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-		InsecureSkipVerify: true, // dev: serve UI over http
-	})
+	c, err := websocket.Accept(w, r, nil)
 	if err != nil {
 		return
 	}
@@ -109,42 +107,12 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) resolveToken(ctx context.Context, tok string) (*tenantCtx, error) {
 	if strings.HasPrefix(tok, "ttk_") {
-		return lookupAPIKey(ctx, s.DB, tok)
+		return auth.LookupAPIKey(ctx, s.DB, tok)
 	}
-	return lookupSession(ctx, s.DB, tok)
+	return auth.LookupSession(ctx, s.DB, tok)
 }
 
-// shims so we don't import the auth/sql packages here at the top.
-type tenantCtx = struct {
-	TenantID string
-	UserID   string
-	Role     string
-}
-
-func lookupAPIKey(ctx context.Context, db *sql.DB, plain string) (*tenantCtx, error) {
-	hash := auth.HashAPIKey(plain)
-	row := db.QueryRowContext(ctx,
-		`SELECT ak.tenant_id, ak.user_id, u.role
-		 FROM api_keys ak JOIN users u ON u.id = ak.user_id
-		 WHERE ak.key_hash = ?`, hash)
-	var tc tenantCtx
-	if err := row.Scan(&tc.TenantID, &tc.UserID, &tc.Role); err != nil {
-		return nil, errors.New("invalid api key")
-	}
-	return &tc, nil
-}
-
-func lookupSession(ctx context.Context, db *sql.DB, tok string) (*tenantCtx, error) {
-	row := db.QueryRowContext(ctx,
-		`SELECT s.tenant_id, s.user_id, u.role
-		 FROM sessions s JOIN users u ON u.id = s.user_id
-		 WHERE s.id = ? AND s.expires_at > ?`, tok, time.Now().UnixMilli())
-	var tc tenantCtx
-	if err := row.Scan(&tc.TenantID, &tc.UserID, &tc.Role); err != nil {
-		return nil, errors.New("invalid session")
-	}
-	return &tc, nil
-}
+type tenantCtx = tenant.Context
 
 // jsonEncode is a tiny shim that lets us avoid importing encoding/json
 // at the top of the file (we use it from one place).

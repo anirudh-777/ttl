@@ -31,6 +31,7 @@ Example MCP config (Claude Desktop):
 
 Requires the CLI to be logged in (run 'ttl login' first).`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		mcp.Version = version
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		if err := mcp.Run(ctx); err != nil {

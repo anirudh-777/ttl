@@ -16,6 +16,23 @@ type Context struct {
 	TenantID string
 	UserID   string
 	Role     string // owner | admin | member
+	Scopes   []string
+}
+
+func (c *Context) HasScope(scope string) bool {
+	if c == nil {
+		return false
+	}
+	// Browser sessions inherit role permissions; API keys carry an explicit set.
+	if len(c.Scopes) == 0 {
+		return true
+	}
+	for _, granted := range c.Scopes {
+		if granted == scope || granted == "admin" {
+			return true
+		}
+	}
+	return false
 }
 
 type ctxKey struct{}

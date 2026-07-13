@@ -20,7 +20,8 @@ internal/
   model/           domain types (Task, Project, TimeEntry, Reminder)
   store/           every SQL query (every method takes *tenant.Context)
   tenant/          per-request tenant/user context
-  tui/             Bubble Tea today/inbox views
+  recurrence/      preset and RFC 5545 recurrence normalization
+  tui/             Bubble Tea smart views
   ws/              WebSocket upgrade handler + tenant filter
 migrations/        SQL files (also embedded into internal/db/migrations)
 ```
@@ -39,28 +40,26 @@ WAL mode is enabled at open, plus `busy_timeout=5000` so writes don't
 fail under modest contention. Foreign keys are on; cascade rules keep
 deletes consistent.
 
-### Tables (after Phase 3)
+### Tables (v1)
 
 ```
 tenants            id, name, created_at
 users              id, tenant_id, email, password_hash, role, created_at
-api_keys           id, user_id, tenant_id, key_hash, name, last_used_at, created_at
+api_keys           id, user_id, tenant_id, key_hash, name, scopes_json,
+                   expires_at, last_used_at, created_at
 sessions           id, user_id, tenant_id, expires_at, created_at
 projects           id, tenant_id, name, color, archived_at, created_at
 tags               id, tenant_id, name, color, created_at
 tasks              id, tenant_id, project_id, parent_id, title, notes,
                    status, priority, due_at, recurrence_rrule,
-                   created_by, created_at, updated_at, completed_at
+                   position, created_by, created_at, updated_at, completed_at, deleted_at
 task_tags          task_id, tag_id, tenant_id
 time_entries       id, tenant_id, user_id, task_id, kind,
-                   started_at, ended_at, duration_ms, note
+                   started_at, ended_at, duration_ms, planned_duration_ms, deadline_at, note
 reminders          id, tenant_id, task_id, user_id, fire_at,
-                   status, created_at, sent_at
-```
-
-Phase 4 adds:
-
-```
+                   endpoint_id, status, delivery_status, created_at, sent_at
+notification_endpoints id, tenant_id, name, kind, url, secret_enc, enabled
+invites            id, tenant_id, role, token_hash, expires_at, used_at
 integrations       id, tenant_id, provider, label, config_json, created_at
 issue_links        id, tenant_id, task_id, provider, external_id,
                    external_url, last_synced_at
@@ -122,7 +121,8 @@ Three auth paths, all backing onto the same `tenant.Context`:
 
 API keys are `ttk_` followed by 32 random base64-url chars. The
 plaintext is shown exactly once on creation; only the SHA-256 hash is
-stored. The plaintext never leaves the user's machine except over
+stored. Keys carry explicit scopes and optional expiry and can be renamed,
+rotated, or revoked. The plaintext never leaves the user's machine except over
 HTTPS in transit.
 
 ## Pub/sub

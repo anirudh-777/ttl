@@ -6,7 +6,7 @@ title: Guide
 <header>
   <div class="brand">
     <h1>ttl</h1>
-    <span class="ver">v0.4.1</span>
+    <span class="ver">v1.0.0</span>
   </div>
   <p class="tag">Terminal Task List &mdash; a tiny, AI-friendly task tracker.</p>
   <p class="lede">
@@ -36,7 +36,7 @@ title: Guide
 <p>Download a release binary from your project's <code>dist/</code>
 folder, or build from source:</p>
 
-<pre><code>go install ./cmd/ttl@latest
+<pre><code>go install github.com/anirudh-777/ttl/cmd/ttl@latest
 # or
 git clone ttl &amp;&amp; cd ttl &amp;&amp; make build</code></pre>
 
@@ -56,15 +56,15 @@ ttl signup --server http://localhost:8093
 # 3. Capture a few tasks
 ttl add "Write docs"        --project docs  --tag p1
 ttl add "Review PR #42"     --project eng   --due tomorrow
-ttl add "Weekly standup"    --rrule "FREQ=WEEKLY;BYDAY=MO"
+ttl add "Weekly standup"    --repeat 'rrule:FREQ=WEEKLY;BYDAY=MO'
 
 # 4. Review
 ttl today          # what's due / in progress
 ttl inbox          # everything else
-ttl                # bare command opens the TUI today view
+ttl view today     # open the TUI today view
 
 # 5. Complete
-ttl done &lt;task-id&gt; --print-next   # shows next spawn if recurring
+ttl done &lt;task-id&gt;                # shows next spawn if recurring
 </code></pre>
 
 <h2 id="model">Mental model</h2>
@@ -96,7 +96,7 @@ no global path.
   <thead><tr><th>Surface</th><th>Entry</th><th>Best for</th></tr></thead>
   <tbody>
     <tr><td>CLI</td><td><code>ttl &lt;cmd&gt;</code></td><td>Fast capture, scripts</td></tr>
-    <tr><td>TUI</td><td><code>ttl</code></td><td>Triage, vim-style navigation</td></tr>
+    <tr><td>TUI</td><td><code>ttl view today</code></td><td>Triage, vim-style navigation</td></tr>
     <tr><td>Web</td><td><code>http://localhost:8093/</code></td><td>Phone, shared machines</td></tr>
     <tr><td>REST</td><td><code>/api/v1/...</code></td><td>Anything that speaks HTTP</td></tr>
     <tr><td>MCP</td><td><code>ttl mcp</code></td><td>Claude / Cursor / Cline</td></tr>
@@ -107,16 +107,16 @@ no global path.
 <h2 id="capture">Capture &amp; review</h2>
 
 <h3>Add</h3>
-<pre><code>ttl add "title" [--project p] [--tag t] [--due 2026-07-01] [--rrule "..."] [--notes "..."]
-ttl add "subtask" --parent &lt;task-id&gt;
-ttl add "title" --json   # emit the task as NDJSON to stdout (for piping)
+<pre><code>ttl add "title" [--project p] [--tag t] [--due 2026-07-01] [--repeat weekly] [--notes "..."]
+ttl subtask add &lt;task-id&gt; "subtask"
+ttl add "title" --format json
 </code></pre>
 
 <h3>List &amp; filter</h3>
-<pre><code>ttl list tasks                          # all
-ttl list tasks --project docs --tag p1  # filtered
-ttl list tasks --since 2026-06-01
-ttl list tasks -o ndjson | jq -r '.id'  # pipeline
+<pre><code>ttl list                               # open tasks
+ttl list --project docs                # filter by project
+ttl list --view upcoming               # smart view
+ttl list -o ndjson | jq -r '.id'       # pipeline
 </code></pre>
 
 <h3>Output formats</h3>
@@ -126,25 +126,23 @@ NDJSON is one record per line &mdash; ideal for agents and <code>jq</code>.</p>
 <h3>TUI keys</h3>
 <ul>
   <li><kbd>j</kbd>/<kbd>k</kbd> or <kbd>&uarr;</kbd>/<kbd>&darr;</kbd> &mdash; move</li>
-  <li><kbd>Enter</kbd> &mdash; show details</li>
-  <li><kbd>d</kbd> &mdash; mark done</li>
+  <li><kbd>Space</kbd> &mdash; mark done</li>
+  <li><kbd>e</kbd> &mdash; edit title</li>
+  <li><kbd>d</kbd>, then <kbd>y</kbd> &mdash; move to trash</li>
   <li><kbd>n</kbd> &mdash; new task</li>
-  <li><kbd>t</kbd> &mdash; toggle today / inbox</li>
+  <li><kbd>1</kbd>&ndash;<kbd>7</kbd> &mdash; switch smart view</li>
   <li><kbd>q</kbd> &mdash; quit</li>
 </ul>
 
 <h2 id="focus">Focus &amp; time</h2>
 
-<pre><code>ttl timer start &lt;task-id&gt;     # or omit id for "general"
-ttl timer stop
+<pre><code>ttl start &lt;task-id&gt;           # or omit id for "general"
+ttl stop
 ttl timer                      # what's running
 
-ttl pomodoro                   # 25 min focus / 5 min break
-ttl pomodoro --focus 50 --break 10
+ttl pomodoro &lt;task-id&gt; --minutes 25
 
 ttl log                        # today's worklog summary
-ttl log --week                 # this week
-ttl log --project docs         # filtered
 </code></pre>
 
 <p>Only one timer per user can run at a time. Starting a new one
@@ -153,23 +151,22 @@ without stopping the old one returns the active timer.</p>
 <h2 id="recur">Recurring &amp; reminders</h2>
 
 <h3>Recurring tasks</h3>
-<pre><code>ttl add "Standup"  --rrule "FREQ=WEEKLY;BYDAY=MO"
-ttl add "Pay rent" --rrule "FREQ=MONTHLY;BYMONTHDAY=1"
-ttl add "Backup"   --rrule "FREQ=DAILY"
+<pre><code>ttl add "Standup"  --repeat 'rrule:FREQ=WEEKLY;BYDAY=MO'
+ttl add "Pay rent" --repeat monthly
+ttl add "Backup"   --repeat daily
 </code></pre>
 
-<p>Completing a recurring task spawns the next occurrence. Use
-<code>--print-next</code> to see it:</p>
+<p>Completing a recurring task spawns and prints the next occurrence:</p>
 
-<pre><code>ttl done &lt;task-id&gt; --print-next
+<pre><code>ttl done &lt;task-id&gt;
 # task abc closed
 # next occurrence: def (due 2026-07-04)
 </code></pre>
 
 <h3>Reminders</h3>
-<pre><code>ttl reminder "call mom" --at "2026-06-28T09:00"
+<pre><code>ttl reminder add &lt;task-id&gt; --at +30m
 ttl reminder list
-ttl reminder rm &lt;id&gt;
+ttl reminder delete &lt;id&gt;
 </code></pre>
 
 <p>The server checks for due reminders every 60 seconds and fires a

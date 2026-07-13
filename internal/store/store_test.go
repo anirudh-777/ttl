@@ -146,6 +146,188 @@ func TestTaskCRUD(t *testing.T) {
 	}
 }
 
+func TestTaskTrashRestoreAndPurge(t *testing.T) {
+	d := openTestDB(t)
+	st := store.New(d)
+	ctx := context.Background()
+	u := signup(t, d, "trash@test.local", "Trash")
+	tc := &tenant.Context{TenantID: u.TenantID, UserID: u.ID, Role: u.Role}
+
+	parent, err := st.CreateTask(ctx, tc, mkTask("parent"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	childIn := mkTask("child")
+	childIn.ParentID = &parent.ID
+	child, err := st.CreateTask(ctx, tc, childIn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.TrashTask(ctx, tc, parent.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.GetTask(ctx, tc, parent.ID); err == nil {
+		t.Fatal("trashed parent remained visible")
+	}
+	trash, err := st.ListTasks(ctx, tc, store.TaskFilter{Deleted: true}, 10)
+	if err != nil || len(trash) != 2 {
+		t.Fatalf("trash=%v err=%v", trash, err)
+	}
+	if err := st.RestoreTask(ctx, tc, parent.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.GetTask(ctx, tc, child.ID); err != nil {
+		t.Fatalf("child not restored: %v", err)
+	}
+	if err := st.TrashTask(ctx, tc, parent.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.PurgeTask(ctx, tc, parent.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.GetTaskIncludingDeleted(ctx, tc, child.ID); err == nil {
+		t.Fatal("purging parent did not cascade")
+	}
+}
+
+func TestTrashRetentionPurge(t *testing.T) {
+	d := openTestDB(t)
+	st := store.New(d)
+	ctx := context.Background()
+	u := signup(t, d, "retention@test.local", "Retention")
+	tc := &tenant.Context{TenantID: u.TenantID, UserID: u.ID, Role: u.Role}
+	old, _ := st.CreateTask(ctx, tc, mkTask("old"))
+	recent, _ := st.CreateTask(ctx, tc, mkTask("recent"))
+	if err := st.TrashTask(ctx, tc, old.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.TrashTask(ctx, tc, recent.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.ExecContext(ctx, `UPDATE tasks SET deleted_at = ? WHERE id = ?`, time.Now().Add(-48*time.Hour).UnixMilli(), old.ID); err != nil {
+		t.Fatal(err)
+	}
+	n, err := st.PurgeTrashOlderThan(ctx, time.Now().Add(-24*time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 {
+		t.Fatalf("purged=%d", n)
+	}
+	if _, err := st.GetTaskIncludingDeleted(ctx, tc, old.ID); err == nil {
+		t.Fatal("old task retained")
+	}
+	if _, err := st.GetTaskIncludingDeleted(ctx, tc, recent.ID); err != nil {
+		t.Fatal("recent task purged")
+	}
+}
+
+func TestTaskTagReplacementAndManualPosition(t *testing.T) {
+	d := openTestDB(t)
+	st := store.New(d)
+	ctx := context.Background()
+	u := signup(t, d, "order@test.local", "Order")
+	tc := &tenant.Context{TenantID: u.TenantID, UserID: u.ID, Role: u.Role}
+
+	first := mkTask("first")
+	first.DueAt = nil
+	first.Tags = []string{"one", "two"}
+	a, err := st.CreateTask(ctx, tc, first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second := mkTask("second")
+	second.DueAt = nil
+	b, err := st.CreateTask(ctx, tc, second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b.Position <= a.Position {
+		t.Fatalf("positions not increasing: %d then %d", a.Position, b.Position)
+	}
+	updated, err := st.UpdateTask(ctx, tc, a.ID, map[string]any{"tags": []string{"three"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(updated.Tags) != 1 || updated.Tags[0] != "three" {
+		t.Fatalf("tags not replaced: %v", updated.Tags)
+	}
+	inbox, err := st.ListTasks(ctx, tc, store.TaskFilter{Inbox: true, Order: "manual"}, 10)
+	if err != nil || len(inbox) != 2 || inbox[0].ID != a.ID {
+		t.Fatalf("manual inbox=%v err=%v", inbox, err)
+	}
+}
+
+func TestTaskReorderAndCycleRejection(t *testing.T) {
+	d := openTestDB(t)
+	st := store.New(d)
+	ctx := context.Background()
+	u := signup(t, d, "rank@test.local", "Rank")
+	tc := &tenant.Context{TenantID: u.TenantID, UserID: u.ID, Role: u.Role}
+	a, _ := st.CreateTask(ctx, tc, mkTask("a"))
+	b, _ := st.CreateTask(ctx, tc, mkTask("b"))
+	if _, err := st.ReorderTask(ctx, tc, b.ID, nil, nil, a.ID, ""); err != nil {
+		t.Fatal(err)
+	}
+	items, err := st.ListTasks(ctx, tc, store.TaskFilter{Inbox: true, Order: "manual"}, 10)
+	if err != nil || len(items) != 2 || items[0].ID != b.ID {
+		t.Fatalf("items=%v err=%v", items, err)
+	}
+	parent := a.ID
+	if _, err := st.ReorderTask(ctx, tc, b.ID, nil, &parent, "", ""); err != nil {
+		t.Fatal(err)
+	}
+	child := b.ID
+	if _, err := st.ReorderTask(ctx, tc, a.ID, nil, &child, "", ""); err == nil {
+		t.Fatal("expected hierarchy cycle rejection")
+	}
+}
+
+func TestTaskMutationsValidateTenantRelationsAndFields(t *testing.T) {
+	d := openTestDB(t)
+	st := store.New(d)
+	ctx := context.Background()
+	alice := signup(t, d, "mutation-a@test.local", "Mutation A")
+	bob := signup(t, d, "mutation-b@test.local", "Mutation B")
+	tcA := &tenant.Context{TenantID: alice.TenantID, UserID: alice.ID, Role: alice.Role}
+	tcB := &tenant.Context{TenantID: bob.TenantID, UserID: bob.ID, Role: bob.Role}
+	task, err := st.CreateTask(ctx, tcA, &model.Task{Title: "valid", Tags: []string{"keep"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	foreignProject, err := st.CreateProject(ctx, tcB, "foreign", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	foreignParent, err := st.CreateTask(ctx, tcB, mkTask("foreign parent"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.ReorderTask(ctx, tcA, task.ID, &foreignProject.ID, nil, "", ""); err == nil {
+		t.Fatal("accepted cross-tenant project during reorder")
+	}
+	if _, err := st.ReorderTask(ctx, tcA, task.ID, nil, &foreignParent.ID, "", ""); err == nil {
+		t.Fatal("accepted cross-tenant parent during reorder")
+	}
+	for _, fields := range []map[string]any{
+		{"title": "  "},
+		{"status": "unknown"},
+		{"priority": float64(1.5)},
+		{"priority": float64(4)},
+	} {
+		if _, err := st.UpdateTask(ctx, tcA, task.ID, fields); err == nil {
+			t.Fatalf("accepted invalid fields: %#v", fields)
+		}
+	}
+	updated, err := st.UpdateTask(ctx, tcA, task.ID, map[string]any{"tags": []any{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(updated.Tags) != 0 {
+		t.Fatalf("empty tag replacement retained tags: %v", updated.Tags)
+	}
+}
+
 func TestAPIKeyLookup(t *testing.T) {
 	d := openTestDB(t)
 	u := signup(t, d, "k@k.test", "Acme")

@@ -5,7 +5,6 @@
 package main
 
 import (
-	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -20,6 +19,7 @@ import (
 	"github.com/anirudh-777/ttl/internal/client"
 	"github.com/anirudh-777/ttl/internal/config"
 	"github.com/anirudh-777/ttl/internal/fmtcmd"
+	"github.com/anirudh-777/ttl/internal/recurrence"
 )
 
 var (
@@ -55,6 +55,7 @@ var addCmd = &cobra.Command{
 		tagList, _ := cmd.Flags().GetStringSlice("tag")
 		dueStr, _ := cmd.Flags().GetString("due")
 		notes, _ := cmd.Flags().GetString("notes")
+		repeat, _ := cmd.Flags().GetString("repeat")
 
 		var projectID string
 		if projectName != "" {
@@ -87,9 +88,13 @@ var addCmd = &cobra.Command{
 			due = &t
 		}
 
+		rrule, err := recurrence.Normalize(repeat, time.Now())
+		if err != nil {
+			return err
+		}
 		created, err := c.CreateTask(context.Background(), client.CreateTaskOpts{
 			Title: title, Notes: notes, Priority: priority,
-			ProjectID: projectID, DueAt: due, Tags: tagList,
+			ProjectID: projectID, DueAt: due, Tags: tagList, RecurrenceRRule: rrule,
 		})
 		if err != nil {
 			return err
@@ -114,6 +119,7 @@ var listCmd = &cobra.Command{
 		}
 		opts.Overdue = overdueFlag(cmd)
 		opts.Search, _ = cmd.Flags().GetString("search")
+		opts.View, _ = cmd.Flags().GetString("view")
 		projectName, _ := cmd.Flags().GetString("project")
 		if projectName != "" {
 			projects, _ := c.ListProjects(context.Background())
@@ -149,6 +155,71 @@ var showCmd = &cobra.Command{
 			return err
 		}
 		return fmtcmd.PrintTask(cmd.OutOrStdout(), fmtcmd.ResolveFormat(flagFormat), t)
+	},
+}
+
+var moveCmd = &cobra.Command{
+	Use: "move <id>", Short: "Move or reorder a task", Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		c := mustClient()
+		id, err := resolveTaskID(c, args[0])
+		if err != nil {
+			return err
+		}
+		var projectID, parentID *string
+		if cmd.Flags().Changed("project") {
+			name, _ := cmd.Flags().GetString("project")
+			resolved := ""
+			if name != "" && !strings.EqualFold(name, "inbox") {
+				items, err := c.ListProjects(cmd.Context())
+				if err != nil {
+					return err
+				}
+				for _, p := range items {
+					if strings.EqualFold(p.Name, name) || strings.HasPrefix(p.ID, name) {
+						resolved = p.ID
+						break
+					}
+				}
+				if resolved == "" {
+					return fmt.Errorf("project %q not found", name)
+				}
+			}
+			projectID = &resolved
+		}
+		if cmd.Flags().Changed("parent") {
+			value, _ := cmd.Flags().GetString("parent")
+			resolved := ""
+			if value != "" && !strings.EqualFold(value, "none") {
+				resolved, err = resolveTaskID(c, value)
+				if err != nil {
+					return err
+				}
+			}
+			parentID = &resolved
+		}
+		before, _ := cmd.Flags().GetString("before")
+		after, _ := cmd.Flags().GetString("after")
+		if before != "" {
+			before, err = resolveTaskID(c, before)
+			if err != nil {
+				return err
+			}
+		}
+		if after != "" {
+			after, err = resolveTaskID(c, after)
+			if err != nil {
+				return err
+			}
+		}
+		if before != "" && after != "" {
+			return fmt.Errorf("use only one of --before or --after")
+		}
+		moved, err := c.ReorderTask(cmd.Context(), id, projectID, parentID, before, after)
+		if err != nil {
+			return err
+		}
+		return fmtcmd.PrintTask(cmd.OutOrStdout(), fmtcmd.ResolveFormat(flagFormat), moved)
 	},
 }
 
@@ -228,6 +299,21 @@ var editCmd = &cobra.Command{
 				fields["project_id"] = pid
 			}
 		}
+		if cmd.Flags().Changed("tag") {
+			fields["tags"], _ = cmd.Flags().GetStringSlice("tag")
+		}
+		if cmd.Flags().Changed("repeat") {
+			repeat, _ := cmd.Flags().GetString("repeat")
+			rule, err := recurrence.Normalize(repeat, time.Now())
+			if err != nil {
+				return err
+			}
+			if rule == "" {
+				fields["recurrence_rrule"] = nil
+			} else {
+				fields["recurrence_rrule"] = rule
+			}
+		}
 		t, err := c.UpdateTask(context.Background(), id, fields)
 		if err != nil {
 			return err
@@ -250,7 +336,43 @@ var rmCmd = &cobra.Command{
 		if err := c.DeleteTask(context.Background(), id); err != nil {
 			return err
 		}
-		fmt.Fprintln(cmd.OutOrStdout(), "deleted", id)
+		fmt.Fprintln(cmd.OutOrStdout(), "moved to trash", id)
+		return nil
+	},
+}
+
+var restoreCmd = &cobra.Command{
+	Use: "restore <id>", Short: "Restore a task from trash", Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		c := mustClient()
+		id, err := resolveTrashedTaskID(c, args[0])
+		if err != nil {
+			return err
+		}
+		t, err := c.RestoreTask(cmd.Context(), id)
+		if err != nil {
+			return err
+		}
+		return fmtcmd.PrintTask(cmd.OutOrStdout(), fmtcmd.ResolveFormat(flagFormat), t)
+	},
+}
+
+var purgeCmd = &cobra.Command{
+	Use: "purge <id>", Short: "Permanently delete a trashed task", Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		yes, _ := cmd.Flags().GetBool("yes")
+		if !yes {
+			return errors.New("permanent deletion requires --yes")
+		}
+		c := mustClient()
+		id, err := resolveTrashedTaskID(c, args[0])
+		if err != nil {
+			return err
+		}
+		if err := c.PurgeTask(cmd.Context(), id); err != nil {
+			return err
+		}
+		fmt.Fprintln(cmd.OutOrStdout(), "permanently deleted", id)
 		return nil
 	},
 }
@@ -284,6 +406,40 @@ var projectAddCmd = &cobra.Command{
 		return nil
 	},
 }
+var projectEditCmd = &cobra.Command{Use: "edit <id> <name>", Args: cobra.ExactArgs(2), RunE: func(cmd *cobra.Command, args []string) error {
+	c := mustClient()
+	id := args[0]
+	color := ""
+	if cmd.Flags().Changed("color") {
+		color, _ = cmd.Flags().GetString("color")
+	} else {
+		items, err := c.ListProjects(cmd.Context())
+		if err != nil {
+			return err
+		}
+		for _, item := range items {
+			if item.ID == args[0] || strings.HasPrefix(item.ID, args[0]) {
+				id = item.ID
+				color = item.Color
+				break
+			}
+		}
+	}
+	return c.UpdateProject(cmd.Context(), id, args[1], color)
+}}
+var projectArchiveCmd = &cobra.Command{Use: "archive <id>", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+	return mustClient().ArchiveProject(cmd.Context(), args[0])
+}}
+var projectRestoreCmd = &cobra.Command{Use: "restore <id>", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+	return mustClient().RestoreProject(cmd.Context(), args[0])
+}}
+var projectPurgeCmd = &cobra.Command{Use: "purge <id>", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+	yes, _ := cmd.Flags().GetBool("yes")
+	if !yes {
+		return errors.New("project purge requires --yes")
+	}
+	return mustClient().PurgeProject(cmd.Context(), args[0])
+}}
 
 // tagCmd groups tag subcommands.
 var tagCmd = &cobra.Command{Use: "tag", Short: "Manage tags"}
@@ -314,6 +470,31 @@ var tagAddCmd = &cobra.Command{
 		return nil
 	},
 }
+var tagEditCmd = &cobra.Command{Use: "edit <id> <name>", Args: cobra.ExactArgs(2), RunE: func(cmd *cobra.Command, args []string) error {
+	c := mustClient()
+	id := args[0]
+	color := ""
+	if cmd.Flags().Changed("color") {
+		color, _ = cmd.Flags().GetString("color")
+	} else {
+		items, err := c.ListTags(cmd.Context())
+		if err != nil {
+			return err
+		}
+		for _, item := range items {
+			if item.ID == args[0] || strings.HasPrefix(item.ID, args[0]) {
+				id = item.ID
+				color = item.Color
+				break
+			}
+		}
+	}
+	return c.UpdateTag(cmd.Context(), id, args[1], color)
+}}
+var tagMergeCmd = &cobra.Command{Use: "merge <source-id> <target-id>", Args: cobra.ExactArgs(2), RunE: func(cmd *cobra.Command, args []string) error {
+	return mustClient().MergeTag(cmd.Context(), args[0], args[1])
+}}
+var tagDeleteCmd = &cobra.Command{Use: "delete <id>", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error { return mustClient().DeleteTag(cmd.Context(), args[0]) }}
 
 // loginCmd prompts for email and password and stores an API key.
 var loginCmd = &cobra.Command{
@@ -327,11 +508,10 @@ var loginCmd = &cobra.Command{
 		if cfg.ServerURL == "" {
 			cfg.ServerURL = defaultServerURL()
 		}
-		reader := bufio.NewReader(cmd.InOrStdin())
 		fmt.Fprint(cmd.OutOrStdout(), "Email: ")
-		email, _ := reader.ReadString('\n')
+		email, _ := readLine(cmd.InOrStdin())
 		email = strings.TrimSpace(email)
-		pw, err := promptSecret(cmd.OutOrStdout(), "Password: ")
+		pw, err := promptSecret(cmd.InOrStdin(), cmd.OutOrStdout(), "Password: ")
 		if err != nil {
 			return err
 		}
@@ -366,20 +546,20 @@ var signupCmd = &cobra.Command{
 		if cfg.ServerURL == "" {
 			cfg.ServerURL = defaultServerURL()
 		}
-		reader := bufio.NewReader(cmd.InOrStdin())
 		fmt.Fprint(cmd.OutOrStdout(), "Workspace name: ")
-		tenantName, _ := reader.ReadString('\n')
+		tenantName, _ := readLine(cmd.InOrStdin())
 		tenantName = strings.TrimSpace(tenantName)
 		fmt.Fprint(cmd.OutOrStdout(), "Email: ")
-		email, _ := reader.ReadString('\n')
+		email, _ := readLine(cmd.InOrStdin())
 		email = strings.TrimSpace(email)
-		pw, err := promptSecret(cmd.OutOrStdout(), "Password (min 6 chars): ")
+		pw, err := promptSecret(cmd.InOrStdin(), cmd.OutOrStdout(), "Password (min 6 chars): ")
 		if err != nil {
 			return err
 		}
 
 		c := client.New(cfg.ServerURL, "")
-		u, err := c.Signup(context.Background(), tenantName, email, pw)
+		invite, _ := cmd.Flags().GetString("invite")
+		u, err := c.SignupWithInvite(context.Background(), tenantName, email, pw, invite)
 		if err != nil {
 			return err
 		}
@@ -450,6 +630,9 @@ func mustClient() *client.Client {
 	if cfg.ServerURL == "" {
 		cfg.ServerURL = defaultServerURL()
 	}
+	if flagServer != "" {
+		cfg.ServerURL = flagServer
+	}
 	return client.New(cfg.ServerURL, cfg.APIKey)
 }
 
@@ -466,10 +649,10 @@ func defaultServerURL() string {
 // promptSecret prints prompt and reads a line of input with the
 // terminal echo disabled. Falls back to plain stdin read when the
 // input is not a TTY (e.g. piped from a script).
-func promptSecret(w io.Writer, prompt string) (string, error) {
+func promptSecret(in io.Reader, w io.Writer, prompt string) (string, error) {
 	fmt.Fprint(w, prompt)
-	fd := uintptr(os.Stdin.Fd())
-	if term.IsTerminal(fd) {
+	if f, ok := in.(*os.File); ok && term.IsTerminal(f.Fd()) {
+		fd := f.Fd()
 		b, err := term.ReadPassword(fd)
 		fmt.Fprintln(w) // move past the hidden line
 		if err != nil {
@@ -480,22 +663,52 @@ func promptSecret(w io.Writer, prompt string) (string, error) {
 	// Non-tty: read plainly but emit a warning so users don't
 	// accidentally type secrets into piped scripts.
 	fmt.Fprintln(os.Stderr, "(warning: stdin is not a TTY; reading secret in cleartext)")
-	rd := bufio.NewReader(os.Stdin)
-	line, err := rd.ReadString('\n')
+	line, err := readLine(in)
 	if err != nil {
 		return "", err
 	}
 	return strings.TrimRight(line, "\r\n"), nil
 }
 
+// readLine deliberately reads only through the newline. Unlike creating a
+// fresh bufio.Reader for each prompt, it cannot consume bytes intended for a
+// later prompt when credentials are piped into the CLI.
+func readLine(in io.Reader) (string, error) {
+	var b strings.Builder
+	var one [1]byte
+	for {
+		n, err := in.Read(one[:])
+		if n > 0 {
+			if one[0] == '\n' {
+				return b.String(), nil
+			}
+			b.WriteByte(one[0])
+		}
+		if err != nil {
+			if errors.Is(err, io.EOF) && b.Len() > 0 {
+				return b.String(), nil
+			}
+			return b.String(), err
+		}
+	}
+}
+
 // resolveTaskID accepts either a full UUID or a short prefix. It looks
 // up tasks via the configured filter and matches the prefix. Returns
 // the full ID or an error if ambiguous / not found.
 func resolveTaskID(c *client.Client, ref string) (string, error) {
+	return resolveTaskIDInView(c, ref, "")
+}
+
+func resolveTrashedTaskID(c *client.Client, ref string) (string, error) {
+	return resolveTaskIDInView(c, ref, "trash")
+}
+
+func resolveTaskIDInView(c *client.Client, ref, view string) (string, error) {
 	if len(ref) == 36 {
 		return ref, nil
 	}
-	tasks, err := c.ListTasks(context.Background(), client.ListOpts{Status: "", Limit: 500})
+	tasks, err := c.ListTasks(context.Background(), client.ListOpts{Status: "", View: view, Limit: 500})
 	if err != nil {
 		return "", err
 	}
@@ -587,10 +800,10 @@ func init() {
 
 	// Subcommand wiring.
 	rootCmd.AddCommand(cliCmd)
-	cliCmd.AddCommand(addCmd, listCmd, showCmd, doneCmd, editCmd, rmCmd)
+	cliCmd.AddCommand(addCmd, listCmd, showCmd, doneCmd, editCmd, moveCmd, rmCmd, restoreCmd, purgeCmd)
 	cliCmd.AddCommand(projectCmd, tagCmd, loginCmd, signupCmd, logoutCmd, configCmd)
 	cliCmd.AddCommand(startCmd, stopCmd, pomodoroCmd, logCmd, timerCmd)
-	rootCmd.AddCommand(todayCmd, inboxCmd, serveCmd)
+	rootCmd.AddCommand(todayCmd, inboxCmd, viewCmd, serveCmd)
 
 	// add flags.
 	addCmd.Flags().IntP("priority", "p", 0, "priority 0..3 (3=high)")
@@ -598,6 +811,7 @@ func init() {
 	addCmd.Flags().StringSliceP("tag", "t", nil, "tags (comma-separated)")
 	addCmd.Flags().StringP("due", "d", "", "due: today|tomorrow|monday|YYYY-MM-DD")
 	addCmd.Flags().StringP("notes", "n", "", "notes (markdown)")
+	addCmd.Flags().String("repeat", "", "repeat: daily|weekdays|weekly|monthly|yearly|rrule:<rule>")
 
 	// list flags.
 	listCmd.Flags().Bool("all", false, "include done tasks")
@@ -605,6 +819,11 @@ func init() {
 	listCmd.Flags().Bool("overdue", false, "only overdue tasks")
 	listCmd.Flags().String("search", "", "search title/notes")
 	listCmd.Flags().StringP("project", "P", "", "filter by project name")
+	listCmd.Flags().String("view", "", "view: inbox|today|upcoming|overdue|next|done|trash")
+	moveCmd.Flags().String("project", "", "destination project name, ID prefix, or inbox")
+	moveCmd.Flags().String("parent", "", "destination parent task ID or none")
+	moveCmd.Flags().String("before", "", "place before task ID")
+	moveCmd.Flags().String("after", "", "place after task ID")
 
 	// edit flags.
 	editCmd.Flags().StringP("title", "t", "", "new title")
@@ -612,13 +831,20 @@ func init() {
 	editCmd.Flags().IntP("priority", "p", 0, "new priority")
 	editCmd.Flags().StringP("due", "d", "", "new due (or 'none')")
 	editCmd.Flags().StringP("project", "P", "", "new project (or '' to clear)")
+	editCmd.Flags().StringSlice("tag", nil, "replacement tags")
+	editCmd.Flags().String("repeat", "", "repeat preset, rrule:<rule>, or none")
+	purgeCmd.Flags().Bool("yes", false, "confirm permanent deletion")
 
 	// project/tag subcommands.
-	projectCmd.AddCommand(projectListCmd, projectAddCmd)
+	projectCmd.AddCommand(projectListCmd, projectAddCmd, projectEditCmd, projectArchiveCmd, projectRestoreCmd, projectPurgeCmd)
 	projectAddCmd.Flags().String("color", "", "hex color, e.g. #ff8800")
-	tagCmd.AddCommand(tagListCmd, tagAddCmd)
+	projectEditCmd.Flags().String("color", "", "new hex color (keeps current color when omitted)")
+	projectPurgeCmd.Flags().Bool("yes", false, "confirm permanent deletion")
+	tagCmd.AddCommand(tagListCmd, tagAddCmd, tagEditCmd, tagMergeCmd, tagDeleteCmd)
 	tagAddCmd.Flags().String("color", "", "hex color")
+	tagEditCmd.Flags().String("color", "", "new hex color (keeps current color when omitted)")
 
 	// config subcommands.
 	configCmd.AddCommand(configShowCmd, configServerCmd)
+	signupCmd.Flags().String("invite", "", "single-use invite token for an existing workspace")
 }

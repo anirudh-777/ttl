@@ -6,7 +6,7 @@
 #
 # Usage:
 #   curl -sSL https://raw.githubusercontent.com/<owner>/ttl/main/scripts/install.sh | bash
-#   curl -sSL ... | bash -s -- --version v0.4.1 --to ~/.local/bin
+#   curl -sSL ... | bash -s -- --version v1.0.0 --to ~/.local/bin
 #
 # Flags:
 #   --version <tag>     Release tag to install (default: latest)
@@ -136,6 +136,7 @@ if [[ $PRINT_LATEST -eq 1 ]]; then
 fi
 if [[ $PRINT_CHECKSUM -eq 1 ]]; then
   if [[ "$VERSION" == "latest" ]]; then VERSION="$(resolve_latest)"; fi
+  if [[ "$VERSION" != v* ]]; then VERSION="v${VERSION}"; fi
   s="$(checksum_for "$VERSION" "$PLATFORM")"
   [[ -n "$s" ]] || die "no checksum for ttl-${PLATFORM}${EXT} in ${VERSION}"
   echo "$s"
@@ -144,6 +145,7 @@ fi
 
 # ---------- install ----------
 if [[ "$VERSION" == "latest" ]]; then VERSION="$(resolve_latest)"; fi
+if [[ "$VERSION" != v* ]]; then VERSION="v${VERSION}"; fi
 URL="https://github.com/${REPO}/releases/download/${VERSION}/ttl-${PLATFORM}${EXT}"
 EXPECTED="$(checksum_for "$VERSION" "$PLATFORM" || true)"
 [[ -n "$EXPECTED" ]] || die "no checksum for ttl-${PLATFORM}${EXT} in ${VERSION} (release ${VERSION} may be incomplete)"

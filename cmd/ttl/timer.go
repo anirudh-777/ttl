@@ -87,7 +87,7 @@ var pomodoroCmd = &cobra.Command{
 			}
 			ref = id
 		}
-		e, err := c.StartTimer(cmd.Context(), ref, "pomodoro", fmt.Sprintf("pomodoro %dm", mins))
+		e, err := c.StartTimerPlanned(cmd.Context(), ref, "pomodoro", fmt.Sprintf("pomodoro %dm", mins), mins)
 		if err != nil {
 			return err
 		}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -32,10 +33,10 @@ Disable the background notice with TTL_NO_UPDATE_CHECK=1.`,
 }
 
 var (
-	updateCheck  bool
-	updateYes    bool
-	updateTag    string
-	updateTo     string
+	updateCheck bool
+	updateYes   bool
+	updateTag   string
+	updateTo    string
 )
 
 func init() {
@@ -74,30 +75,36 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Pre-check so the prompt shows the user what they're getting.
-	res, err := update.Check(ctx, repo, version)
-	if err != nil {
-		return fmt.Errorf("check: %w", err)
-	}
-	if !res.HasUpdate && updateTag == "latest" {
-		fmt.Fprintf(cmd.OutOrStdout(),
-			"ttl %s is already the latest release\n", res.Current)
-		return nil
+	current := strings.TrimPrefix(version, "v")
+	tag := updateTag
+	if tag == "latest" {
+		// Installing an explicit tag must not depend on the repository
+		// having a stable /releases/latest response (prereleases and forks
+		// commonly do not).
+		res, err := update.Check(ctx, repo, version)
+		if err != nil {
+			return fmt.Errorf("check: %w", err)
+		}
+		if !res.HasUpdate {
+			fmt.Fprintf(cmd.OutOrStdout(), "ttl %s is already the latest release\n", res.Current)
+			return nil
+		}
+		current = res.Current
+		tag = "v" + res.Latest
+	} else if !strings.HasPrefix(tag, "v") {
+		tag = "v" + tag
 	}
 	dest := updateTo
+	var err error
 	if dest == "" {
 		dest, err = os.Executable()
 		if err != nil {
 			return err
 		}
 	}
-	tag := updateTag
-	if tag == "latest" {
-		tag = "v" + res.Latest
-	}
 	fmt.Fprintf(cmd.OutOrStdout(),
 		"updating ttl %s -> %s (%s)\n  destination: %s\n",
-		res.Current, tag, update.Platform(), dest)
+		current, tag, update.Platform(), dest)
 
 	if !updateYes && !confirmPrompt(cmd) {
 		fmt.Fprintln(cmd.OutOrStdout(), "aborted")

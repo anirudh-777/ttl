@@ -10,7 +10,7 @@
 class Ttl < Formula
   desc "Terminal-first, multi-tenant task tracker (CLI, TUI, web UI)"
   homepage "https://github.com/anirudh-777/ttl"
-  version "0.1.0"
+  version "1.0.0"
   license "MIT"
 
   on_macos do

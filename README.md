@@ -37,6 +37,7 @@ plugins, integrations, themes. Most of that surface area is unused for
 | 2. Focus | done | Start/stop timer, Pomodoro, daily work-log, active-timer banner |
 | 3. AI + live | done | Recurring tasks (RRULE), reminders, WebSocket live updates, MCP server (10 tools) |
 | 4. Integrations | done | GitHub + Linear providers, webhook receiver with HMAC verification, two-way sync |
+| v1 readiness | done | Recoverable trash, smart views, complete agent CRUD, recurrence/reminders, scoped keys, team invites |
 
 ## Quick start
 
@@ -53,13 +54,13 @@ make build         # produces ./bin/ttl (mac/linux) — or grab a release
 # 4. Use it
 ./bin/ttl add "Buy milk" -p 2 --due today -t shopping
 ./bin/ttl list
+./bin/ttl list --view upcoming
 ./bin/ttl today                       # interactive TUI
 ```
 
 Open <http://localhost:8093/login> for the web UI.
 
-> **Ports.** The default is `:8093` to avoid clashing with dev servers
-> on `:8093`. Override with `ttl serve --addr :NNNN` for the server and
+> **Ports.** The default is `:8093`. Override with `ttl serve --addr :NNNN` for the server and
 > `TTL_SERVER_URL=http://host:port` for the CLI.
 
 ## Surfaces
@@ -67,15 +68,15 @@ Open <http://localhost:8093/login> for the web UI.
 | Surface | Try |
 |---|---|
 | CLI | `ttl add`, `ttl list`, `ttl done`, `ttl start`, `ttl stop`, `ttl log`, `ttl pomodoro` |
-| TUI | `ttl today`, `ttl inbox` — vim-style keys (j/k, space, n, d, r, q) |
-| Web | <http://localhost:8093/today> — Today / Inbox / Projects / Settings |
+| TUI | `ttl view <inbox|today|upcoming|overdue|next|done|trash>` — vim-style keys |
+| Web | <http://localhost:8093/today> — smart views, task editing, projects, team and keys |
 | API | `curl -H "X-API-Key: ttk_..." http://localhost:8093/api/v1/tasks` |
-| MCP | `ttl mcp` — 10 tools for Claude / Cursor / Cline |
+| MCP | `ttl mcp` — task CRUD, subtasks, reminders, timers, and smart views for agents |
 | WebSocket | `ws://localhost:8093/api/v1/ws` — live events |
 
 ## Stack
 
-- **Go 1.22+** — single static binary, no CGO (`modernc.org/sqlite`)
+- **Go 1.25+** — single static binary, no CGO (`modernc.org/sqlite`)
 - **SQLite** — one file per deployment, WAL mode, partial indexes
 - **charm.sh/bubbletea** — TUI
 - **go-chi/chi** — HTTP router
@@ -96,8 +97,7 @@ make build
 curl -L https://github.com/anirudh-777/ttl/releases/latest/download/ttl-darwin-arm64 -o ttl
 chmod +x ttl
 
-# homebrew (when published)
-brew install ttl
+# Homebrew support is planned; use the release binary until the tap is published.
 ```
 
 ## Documentation
@@ -120,6 +120,27 @@ make build         # current OS
 make build-all     # linux/darwin/windows × amd64/arm64
 make docker        # distroless image (~20 MB)
 ```
+
+## v1 productivity workflow
+
+```bash
+ttl add "Weekly review" --due friday --repeat weekly -t planning
+ttl edit <id> --tag planning,deep-work --due tomorrow
+ttl reminder add <id> --at +2h
+ttl pomodoro <id> --minutes 25
+ttl list --view next
+ttl rm <id>                 # recoverable trash
+ttl restore <id>
+ttl purge <id> --yes        # permanent
+```
+
+The same task lifecycle is exposed through REST and MCP. Agent keys are named,
+scoped, optionally expiring, renameable, safely rotatable, and immediately revocable.
+
+By default, only the first account may create a workspace; later signups require
+a single-use invite. Set `TTL_ALLOW_OPEN_SIGNUP=true` only when intentionally
+offering public workspace creation. Trashed tasks are purged after 30 days by
+default; configure this with `ttl serve --trash-retention`.
 
 ## License
 

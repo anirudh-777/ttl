@@ -51,13 +51,23 @@ Same shape: a stdio process that speaks JSON-RPC 2.0.
 | `add_task` | Create a new task. Accepts `title`, `notes`, `priority`, `due_at`, `tags`, `project`. |
 | `list_tasks` | List tasks. Defaults to `status=open`. Filters: `project`, `search`, `overdue`, `limit`. |
 | `show_task` | Get a task by id or short prefix. |
+| `update_task` | Edit title, notes, priority, due date, project, tags, or recurrence. |
 | `complete_task` | Mark a task done. If the task is recurring, the next occurrence is created automatically. |
-| `delete_task` | Delete a task. |
+| `delete_task` / `restore_task` / `purge_task` | Trash, recover, or permanently purge a task. |
+| `reorder_task` | Move or manually order a task or subtask. |
+| `add_subtask` / `list_subtasks` | Manage task hierarchy. |
+| `reminder_add` / `reminders_list` | Schedule and inspect reminders. |
+| `reminder_ack` / `reminder_snooze` / `reminder_delete` | Manage reminder lifecycle. |
 | `start_timer` | Start a work or pomodoro timer (optionally on a task). |
 | `stop_timer` | Stop the active timer. |
 | `active_timer` | Return the running timer (or "no active timer"). |
 | `worklog_today` | Total tracked time today, broken down by task. |
 | `search_tasks` | Substring search across title and notes. |
+| `projects_list` / `project_*` | Create, update, archive, restore, and purge projects. |
+| `tags_list` / `tag_*` | Create, update, merge, and remove tags. |
+| `keys_list` / `key_*` | Create, rename, rotate, and revoke scoped credentials. |
+| `members_list` / `member_*` | Invite and administer workspace members. |
+| `notifications_list` / `notification_*` | Manage signed reminder webhook endpoints. |
 
 ## Example prompts (Claude)
 
@@ -81,8 +91,9 @@ Same shape: a stdio process that speaks JSON-RPC 2.0.
 
 `ttl mcp` reads the same `~/.config/ttl/config.json` the CLI uses.
 Run `ttl login` (or `ttl signup`) once on the machine that hosts the
-MCP server; the persisted API key is sent as `X-API-Key` on every
-call.
+MCP server; the persisted API key is sent as `X-API-Key` on every call.
+For agents, prefer `ttl key create agent --scope tasks:read,tasks:write`
+and add productivity or permanent-delete scopes only when required.
 
 If you need to point the MCP server at a different backend, edit
 `config.json` directly or set `TTL_CONFIG_DIR`.
@@ -91,7 +102,7 @@ If you need to point the MCP server at a different backend, edit
 
 ```
 → {"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}
-← {"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2024-11-05","serverInfo":{"name":"ttl","version":"0.1.0"}}}
+← {"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2024-11-05","serverInfo":{"name":"ttl","version":"v1"}}}
 
 → {"jsonrpc":"2.0","id":2,"method":"tools/list"}
 ← {"jsonrpc":"2.0","id":2,"result":{"tools":[…]}}
@@ -104,5 +115,5 @@ If you need to point the MCP server at a different backend, edit
 
 - The server does not currently push live events. Tools are
   request/response only. Phase 4+ may add subscription resources.
-- No tool-side permission system. Anything that can talk to the
-  process can call any tool. Treat the API key as a secret.
+- Tools are constrained by the configured API key's server-enforced scopes.
+  The stdio process itself remains local and should still be treated as trusted.

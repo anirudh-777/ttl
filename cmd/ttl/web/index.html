@@ -12,13 +12,33 @@
     <nav>
       <a href="/today">Today</a>
       <a href="/inbox">Inbox</a>
+      <a href="/upcoming">Upcoming</a>
+      <a href="/next">Next</a>
+      <a href="/done">Done</a>
+      <a href="/trash">Trash</a>
       <a href="/projects">Projects</a>
       <a href="/settings">Settings</a>
     </nav>
     <span class="user" id="user-email"></span>
   </header>
   <main id="main"></main>
-  <script src="/app.js?v=20260627-1109"></script>
+  <dialog id="task-dialog">
+    <form id="task-edit-form">
+      <h3>Edit task</h3><input type="hidden" name="id">
+      <label><span>Title</span><input name="title" required></label>
+      <label><span>Notes</span><textarea name="notes" rows="5"></textarea></label>
+      <label><span>Due</span><input name="due" type="datetime-local"></label>
+      <label><span>Priority</span><select name="priority"><option value="0">None</option><option value="1">Low</option><option value="2">Medium</option><option value="3">High</option></select></label>
+      <label><span>Tags (comma separated)</span><input name="tags"></label>
+      <label><span>Repeat (preset or RRULE)</span><input name="repeat" placeholder="daily, weekdays, weekly, or RRULE:FREQ=..."></label>
+      <div class="dialog-actions"><button type="button" class="secondary" data-act="cancel-edit">Cancel</button><button type="submit">Save</button></div>
+    </form>
+    <hr>
+    <form id="subtask-form" class="composer"><input name="title" placeholder="Add subtask"><button>Add</button></form>
+    <ul id="subtask-list" class="tasklist"></ul>
+    <form id="reminder-form" class="composer"><input name="at" type="datetime-local" required><button>Add reminder</button></form>
+  </dialog>
+  <script src="/app.js?v=20260713-v1"></script>
   <script>
     // Defensive boot: app.js loads above and (on success) defines
     // window.ttl.{boot,bootAuth}. If anything goes wrong, surface it

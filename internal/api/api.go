@@ -15,9 +15,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -29,6 +32,7 @@ import (
 	"github.com/anirudh-777/ttl/internal/auth"
 	"github.com/anirudh-777/ttl/internal/events"
 	"github.com/anirudh-777/ttl/internal/model"
+	"github.com/anirudh-777/ttl/internal/recurrence"
 	"github.com/anirudh-777/ttl/internal/store"
 	"github.com/anirudh-777/ttl/internal/tenant"
 	"github.com/anirudh-777/ttl/internal/ws"
@@ -36,26 +40,34 @@ import (
 
 // Server bundles dependencies for HTTP handlers.
 type Server struct {
-	DB    *sql.DB
-	Store *store.Store
-	Hub   *events.Hub
+	DB           *sql.DB
+	Store        *store.Store
+	Hub          *events.Hub
+	authMu       sync.Mutex
+	authAttempts map[string][]time.Time
 }
 
 // New returns a chi router with all routes mounted.
 func New(d *sql.DB, st *store.Store, hub *events.Hub) http.Handler {
-	s := &Server{DB: d, Store: st, Hub: hub}
+	s := &Server{DB: d, Store: st, Hub: hub, authAttempts: map[string][]time.Time{}}
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
-	r.Use(middleware.RealIP)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(30 * time.Second))
-	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"*"},
-		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Content-Type", "X-API-Key"},
-		AllowCredentials: true,
-		MaxAge:           300,
-	}))
+	if raw := strings.TrimSpace(os.Getenv("TTL_ALLOWED_ORIGINS")); raw != "" {
+		r.Use(cors.Handler(cors.Options{
+			AllowedOrigins: strings.Split(raw, ","), AllowedMethods: []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+			AllowedHeaders: []string{"Content-Type", "X-API-Key"}, AllowCredentials: true, MaxAge: 300,
+		}))
+	}
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			if req.Body != nil {
+				req.Body = http.MaxBytesReader(w, req.Body, 1<<20)
+			}
+			next.ServeHTTP(w, req)
+		})
+	})
 
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
@@ -84,9 +96,16 @@ func New(d *sql.DB, st *store.Store, hub *events.Hub) http.Handler {
 
 		r.Get("/projects", s.handleListProjects)
 		r.Post("/projects", s.handleCreateProject)
+		r.Patch("/projects/{id}", s.handleUpdateProject)
+		r.Post("/projects/{id}/archive", s.handleArchiveProject)
+		r.Post("/projects/{id}/restore", s.handleRestoreProject)
+		r.Delete("/projects/{id}/purge", s.handlePurgeProject)
 
 		r.Get("/tags", s.handleListTags)
 		r.Post("/tags", s.handleCreateTag)
+		r.Patch("/tags/{id}", s.handleUpdateTag)
+		r.Post("/tags/{id}/merge", s.handleMergeTag)
+		r.Delete("/tags/{id}", s.handleDeleteTag)
 
 		r.Get("/tasks", s.handleListTasks)
 		r.Post("/tasks", s.handleCreateTask)
@@ -94,6 +113,9 @@ func New(d *sql.DB, st *store.Store, hub *events.Hub) http.Handler {
 		r.Patch("/tasks/{id}", s.handleUpdateTask)
 		r.Post("/tasks/{id}/complete", s.handleCompleteTask)
 		r.Delete("/tasks/{id}", s.handleDeleteTask)
+		r.Post("/tasks/{id}/restore", s.handleRestoreTask)
+		r.Post("/tasks/{id}/reorder", s.handleReorderTask)
+		r.Delete("/tasks/{id}/purge", s.handlePurgeTask)
 
 		// Time tracking + work log.
 		r.Post("/timer/start", s.handleTimerStart)
@@ -105,7 +127,14 @@ func New(d *sql.DB, st *store.Store, hub *events.Hub) http.Handler {
 		// Reminders.
 		r.Post("/reminders", s.handleCreateReminder)
 		r.Get("/reminders", s.handleListReminders)
+		r.Patch("/reminders/{id}", s.handleUpdateReminder)
+		r.Post("/reminders/{id}/ack", s.handleAcknowledgeReminder)
+		r.Post("/reminders/{id}/snooze", s.handleSnoozeReminder)
 		r.Delete("/reminders/{id}", s.handleDeleteReminder)
+		r.Get("/notifications", s.handleListNotificationEndpoints)
+		r.Post("/notifications", s.handleCreateNotificationEndpoint)
+		r.Patch("/notifications/{id}", s.handleSetNotificationEndpoint)
+		r.Delete("/notifications/{id}", s.handleDeleteNotificationEndpoint)
 
 		// Integrations.
 		r.Get("/integrations", s.handleListIntegrations)
@@ -114,6 +143,15 @@ func New(d *sql.DB, st *store.Store, hub *events.Hub) http.Handler {
 		r.Post("/integrations/{id}/sync", s.handleSyncIntegration)
 
 		r.Post("/api-keys", s.handleIssueAPIKey)
+		r.Get("/api-keys", s.handleListAPIKeys)
+		r.Patch("/api-keys/{id}", s.handleRenameAPIKey)
+		r.Post("/api-keys/{id}/rotate", s.handleRotateAPIKey)
+		r.Delete("/api-keys/{id}", s.handleRevokeAPIKey)
+		r.Get("/invites", s.handleListInvites)
+		r.Post("/invites", s.handleCreateInvite)
+		r.Get("/members", s.handleListMembers)
+		r.Patch("/members/{id}", s.handleSetMemberRole)
+		r.Delete("/members/{id}", s.handleRemoveMember)
 	})
 
 	return r
@@ -129,8 +167,49 @@ func (s *Server) RequireAuth(next http.Handler) http.Handler {
 			return
 		}
 		ctx := tenant.With(r.Context(), tc)
+		if r.Header.Get("X-API-Key") == "" && r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodOptions {
+			if origin := r.Header.Get("Origin"); origin != "" && origin != "http://"+r.Host && origin != "https://"+r.Host {
+				writeError(w, http.StatusForbidden, "origin_rejected", "cross-origin cookie mutation rejected")
+				return
+			}
+		}
+		if scope := requiredScope(r); scope != "" && !tc.HasScope(scope) {
+			writeError(w, http.StatusForbidden, "insufficient_scope", "credential lacks "+scope)
+			return
+		}
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+func requiredScope(r *http.Request) string {
+	p := r.URL.Path
+	read := r.Method == http.MethodGet || r.Method == http.MethodHead
+	switch {
+	case strings.Contains(p, "/tasks"):
+		if r.Method == http.MethodDelete && strings.HasSuffix(p, "/purge") {
+			return "tasks:delete"
+		}
+		if read {
+			return "tasks:read"
+		}
+		return "tasks:write"
+	case strings.Contains(p, "/timer"), strings.Contains(p, "/worklog"), strings.Contains(p, "/reminders"), strings.Contains(p, "/notifications"):
+		if read {
+			return "productivity:read"
+		}
+		return "productivity:write"
+	case strings.Contains(p, "/integrations"):
+		return "integrations:manage"
+	case strings.Contains(p, "/projects"), strings.Contains(p, "/tags"):
+		if read {
+			return "workspace:read"
+		}
+		return "workspace:write"
+	case strings.Contains(p, "/api-keys"), strings.Contains(p, "/invites"), strings.Contains(p, "/members"):
+		return "admin"
+	default:
+		return ""
+	}
 }
 
 func (s *Server) authenticate(r *http.Request) (*tenant.Context, error) {
@@ -146,22 +225,53 @@ func (s *Server) authenticate(r *http.Request) (*tenant.Context, error) {
 // -------------------------- Auth handlers --------------------------
 
 type signupReq struct {
-	TenantName string `json:"tenant_name"`
-	Email      string `json:"email"`
-	Password   string `json:"password"`
+	TenantName  string `json:"tenant_name"`
+	Email       string `json:"email"`
+	Password    string `json:"password"`
+	InviteToken string `json:"invite_token"`
 }
 
 func (s *Server) handleSignup(w http.ResponseWriter, r *http.Request) {
+	if !s.allowAuthAttempt(r) {
+		writeError(w, http.StatusTooManyRequests, "rate_limited", "too many authentication attempts")
+		return
+	}
 	var req signupReq
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "bad_request", err.Error())
 		return
 	}
-	u, err := auth.Signup(r.Context(), s.DB, req.TenantName, req.Email, req.Password)
+	hasUsers, err := auth.HasUsers(r.Context(), s.DB)
 	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal", err.Error())
+		return
+	}
+	var u *model.User
+	allowOpenSignup := strings.EqualFold(strings.TrimSpace(os.Getenv("TTL_ALLOW_OPEN_SIGNUP")), "true")
+	if hasUsers && req.InviteToken != "" {
+		u, err = auth.JoinWithInvite(r.Context(), s.DB, req.InviteToken, req.Email, req.Password)
+	} else if hasUsers && !allowOpenSignup {
+		if req.InviteToken == "" {
+			writeError(w, http.StatusForbidden, "invite_required", "signup requires an invite")
+			return
+		}
+	} else {
+		if hasUsers {
+			u, err = auth.Signup(r.Context(), s.DB, req.TenantName, req.Email, req.Password)
+		} else {
+			u, err = auth.SignupBootstrap(r.Context(), s.DB, req.TenantName, req.Email, req.Password)
+		}
+	}
+	if err != nil {
+		if hasUsers && req.InviteToken != "" {
+			writeError(w, http.StatusBadRequest, "invalid_invite", err.Error())
+			return
+		}
 		switch {
 		case errors.Is(err, auth.ErrEmailTaken):
 			writeError(w, http.StatusConflict, "email_taken", err.Error())
+		case errors.Is(err, auth.ErrBootstrapDone):
+			writeError(w, http.StatusConflict, "bootstrap_complete", err.Error())
 		default:
 			if strings.Contains(err.Error(), "required") {
 				writeError(w, http.StatusBadRequest, "validation", err.Error())
@@ -178,7 +288,7 @@ func (s *Server) handleSignup(w http.ResponseWriter, r *http.Request) {
 	}
 	http.SetCookie(w, &http.Cookie{
 		Name: "ttl_session", Value: tok, Path: "/",
-		Expires: exp, HttpOnly: true, SameSite: http.SameSiteLaxMode,
+		Expires: exp, HttpOnly: true, Secure: secureCookies(), SameSite: http.SameSiteLaxMode,
 	})
 	writeJSON(w, http.StatusCreated, map[string]any{"user": u})
 }
@@ -189,6 +299,10 @@ type loginReq struct {
 }
 
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
+	if !s.allowAuthAttempt(r) {
+		writeError(w, http.StatusTooManyRequests, "rate_limited", "too many authentication attempts")
+		return
+	}
 	var req loginReq
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "bad_request", err.Error())
@@ -206,9 +320,36 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	http.SetCookie(w, &http.Cookie{
 		Name: "ttl_session", Value: tok, Path: "/",
-		Expires: exp, HttpOnly: true, SameSite: http.SameSiteLaxMode,
+		Expires: exp, HttpOnly: true, Secure: secureCookies(), SameSite: http.SameSiteLaxMode,
 	})
 	writeJSON(w, http.StatusOK, map[string]any{"user": u})
+}
+
+func (s *Server) allowAuthAttempt(r *http.Request) bool {
+	now, cutoff := time.Now(), time.Now().Add(-time.Minute)
+	key := r.RemoteAddr
+	if host, _, err := net.SplitHostPort(key); err == nil {
+		key = host
+	}
+	if strings.EqualFold(strings.TrimSpace(os.Getenv("TTL_TRUST_PROXY")), "true") {
+		if forwarded := strings.TrimSpace(strings.Split(r.Header.Get("X-Forwarded-For"), ",")[0]); net.ParseIP(forwarded) != nil {
+			key = forwarded
+		}
+	}
+	s.authMu.Lock()
+	defer s.authMu.Unlock()
+	items := s.authAttempts[key][:0]
+	for _, at := range s.authAttempts[key] {
+		if at.After(cutoff) {
+			items = append(items, at)
+		}
+	}
+	if len(items) >= 10 {
+		s.authAttempts[key] = items
+		return false
+	}
+	s.authAttempts[key] = append(items, now)
+	return true
 }
 
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
@@ -217,9 +358,14 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	}
 	http.SetCookie(w, &http.Cookie{
 		Name: "ttl_session", Value: "", Path: "/",
-		Expires: time.Unix(0, 0), MaxAge: -1, HttpOnly: true,
+		Expires: time.Unix(0, 0), MaxAge: -1, HttpOnly: true, Secure: secureCookies(), SameSite: http.SameSiteLaxMode,
 	})
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func secureCookies() bool {
+	v := strings.ToLower(strings.TrimSpace(os.Getenv("TTL_SECURE_COOKIES")))
+	return v == "1" || v == "true" || v == "yes"
 }
 
 func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
@@ -271,6 +417,41 @@ func (s *Server) handleCreateProject(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, p)
 }
 
+func (s *Server) handleUpdateProject(w http.ResponseWriter, r *http.Request) {
+	tc := tenant.MustFrom(r.Context())
+	var req projectReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "bad_request", err.Error())
+		return
+	}
+	if err := s.Store.UpdateProject(r.Context(), tc, chi.URLParam(r, "id"), req.Name, req.Color); err != nil {
+		writeError(w, http.StatusBadRequest, "validation", err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) handleArchiveProject(w http.ResponseWriter, r *http.Request) {
+	s.setProjectArchived(w, r, true)
+}
+func (s *Server) handleRestoreProject(w http.ResponseWriter, r *http.Request) {
+	s.setProjectArchived(w, r, false)
+}
+func (s *Server) setProjectArchived(w http.ResponseWriter, r *http.Request, archived bool) {
+	if err := s.Store.ArchiveProject(r.Context(), tenant.MustFrom(r.Context()), chi.URLParam(r, "id"), archived); err != nil {
+		writeError(w, http.StatusNotFound, "not_found", err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+func (s *Server) handlePurgeProject(w http.ResponseWriter, r *http.Request) {
+	if err := s.Store.PurgeProject(r.Context(), tenant.MustFrom(r.Context()), chi.URLParam(r, "id")); err != nil {
+		writeError(w, http.StatusNotFound, "not_found", err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // -------------------------- Tag handlers --------------------------
 
 type tagReq struct {
@@ -301,6 +482,40 @@ func (s *Server) handleCreateTag(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, t)
+}
+
+func (s *Server) handleUpdateTag(w http.ResponseWriter, r *http.Request) {
+	var req tagReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "bad_request", err.Error())
+		return
+	}
+	if err := s.Store.UpdateTag(r.Context(), tenant.MustFrom(r.Context()), chi.URLParam(r, "id"), req.Name, req.Color); err != nil {
+		writeError(w, http.StatusBadRequest, "validation", err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+func (s *Server) handleDeleteTag(w http.ResponseWriter, r *http.Request) {
+	if err := s.Store.DeleteTag(r.Context(), tenant.MustFrom(r.Context()), chi.URLParam(r, "id")); err != nil {
+		writeError(w, http.StatusNotFound, "not_found", err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+func (s *Server) handleMergeTag(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		TargetID string `json:"target_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "bad_request", err.Error())
+		return
+	}
+	if err := s.Store.MergeTag(r.Context(), tenant.MustFrom(r.Context()), chi.URLParam(r, "id"), req.TargetID); err != nil {
+		writeError(w, http.StatusBadRequest, "validation", err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // -------------------------- Task handlers --------------------------
@@ -343,6 +558,22 @@ func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "bad_request", err.Error())
 		return
 	}
+	if req.RecurrenceRRule != nil {
+		start := time.Now()
+		if req.DueAt != nil {
+			start = time.UnixMilli(*req.DueAt)
+		}
+		rule, err := recurrence.Normalize(*req.RecurrenceRRule, start)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "validation", err.Error())
+			return
+		}
+		if rule == "" {
+			req.RecurrenceRRule = nil
+		} else {
+			req.RecurrenceRRule = &rule
+		}
+	}
 	t, err := s.Store.CreateTask(r.Context(), tc, req.toModel())
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "validation", err.Error())
@@ -368,6 +599,26 @@ func (s *Server) handleListTasks(w http.ResponseWriter, r *http.Request) {
 		TagID:     q.Get("tag_id"),
 		Search:    q.Get("q"),
 		Overdue:   q.Get("overdue") == "1",
+	}
+	now := time.Now()
+	startToday := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	endToday := startToday.AddDate(0, 0, 1).Add(-time.Millisecond)
+	switch q.Get("view") {
+	case "inbox":
+		f.Status, f.Inbox, f.Order = "open", true, "manual"
+	case "today":
+		f.Status, f.DueTo = "open", &endToday
+	case "upcoming":
+		from, to := endToday.Add(time.Millisecond), endToday.AddDate(0, 0, 14)
+		f.Status, f.DueFrom, f.DueTo = "open", &from, &to
+	case "overdue":
+		f.Status, f.Overdue = "open", true
+	case "next":
+		f.Status = "open"
+	case "done":
+		f.Status = "done"
+	case "trash":
+		f.Status, f.Deleted = "", true
 	}
 	if p := q.Get("parent_id"); p != "" {
 		v := p
@@ -395,7 +646,13 @@ func (s *Server) handleListTasks(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleGetTask(w http.ResponseWriter, r *http.Request) {
 	tc := tenant.MustFrom(r.Context())
 	id := chi.URLParam(r, "id")
-	t, err := s.Store.GetTask(r.Context(), tc, id)
+	var t *model.Task
+	var err error
+	if r.URL.Query().Get("deleted") == "1" {
+		t, err = s.Store.GetTaskIncludingDeleted(r.Context(), tc, id)
+	} else {
+		t, err = s.Store.GetTask(r.Context(), tc, id)
+	}
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "not_found", "task not found")
@@ -421,6 +678,23 @@ func (s *Server) handleUpdateTask(w http.ResponseWriter, r *http.Request) {
 	if v, ok := fields["due_at"]; ok && v != nil {
 		if n, ok := v.(float64); ok {
 			fields["due_at"] = int64(n)
+		}
+	}
+	if v, ok := fields["recurrence_rrule"]; ok && v != nil {
+		raw, ok := v.(string)
+		if !ok {
+			writeError(w, http.StatusBadRequest, "validation", "recurrence_rrule must be a string or null")
+			return
+		}
+		rule, err := recurrence.Normalize(raw, time.Now())
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "validation", err.Error())
+			return
+		}
+		if rule == "" {
+			fields["recurrence_rrule"] = nil
+		} else {
+			fields["recurrence_rrule"] = rule
 		}
 	}
 	t, err := s.Store.UpdateTask(r.Context(), tc, id, fields)
@@ -486,10 +760,65 @@ func (s *Server) handleDeleteTask(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+func (s *Server) handleRestoreTask(w http.ResponseWriter, r *http.Request) {
+	tc := tenant.MustFrom(r.Context())
+	id := chi.URLParam(r, "id")
+	if err := s.Store.RestoreTask(r.Context(), tc, id); err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "not_found", "trashed task not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "internal", err.Error())
+		return
+	}
+	t, err := s.Store.GetTask(r.Context(), tc, id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal", err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, t)
+}
+
+func (s *Server) handlePurgeTask(w http.ResponseWriter, r *http.Request) {
+	tc := tenant.MustFrom(r.Context())
+	id := chi.URLParam(r, "id")
+	if err := s.Store.PurgeTask(r.Context(), tc, id); err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "not_found", "trashed task not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "internal", err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) handleReorderTask(w http.ResponseWriter, r *http.Request) {
+	tc := tenant.MustFrom(r.Context())
+	var req struct {
+		ProjectID *string `json:"project_id"`
+		ParentID  *string `json:"parent_id"`
+		BeforeID  string  `json:"before_id"`
+		AfterID   string  `json:"after_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "bad_request", err.Error())
+		return
+	}
+	t, err := s.Store.ReorderTask(r.Context(), tc, chi.URLParam(r, "id"), req.ProjectID, req.ParentID, req.BeforeID, req.AfterID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "validation", err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, t)
+}
+
 // -------------------------- API key handlers --------------------------
 
 type apiKeyReq struct {
-	Name string `json:"name"`
+	Name      string   `json:"name"`
+	Scopes    []string `json:"scopes"`
+	ExpiresAt *int64   `json:"expires_at"`
 }
 
 func (s *Server) handleIssueAPIKey(w http.ResponseWriter, r *http.Request) {
@@ -497,7 +826,35 @@ func (s *Server) handleIssueAPIKey(w http.ResponseWriter, r *http.Request) {
 	var req apiKeyReq
 	_ = json.NewDecoder(r.Body).Decode(&req)
 	u := &model.User{ID: tc.UserID, TenantID: tc.TenantID}
-	plain, k, err := auth.IssueAPIKey(r.Context(), s.DB, u, req.Name)
+	var expiresAt *time.Time
+	if req.ExpiresAt != nil {
+		v := time.UnixMilli(*req.ExpiresAt)
+		if !v.After(time.Now()) {
+			writeError(w, http.StatusBadRequest, "validation", "expires_at must be in the future")
+			return
+		}
+		expiresAt = &v
+	}
+	allowed := map[string]bool{"tasks:read": true, "tasks:write": true, "tasks:delete": true,
+		"productivity:read": true, "productivity:write": true, "workspace:read": true,
+		"workspace:write": true, "integrations:manage": true, "admin": true}
+	if req.Scopes == nil {
+		req.Scopes = []string{"tasks:read", "tasks:write", "tasks:delete", "productivity:read", "productivity:write", "workspace:read"}
+		if tc.Role == "owner" {
+			req.Scopes = append(req.Scopes, "workspace:write", "integrations:manage", "admin")
+		}
+	}
+	for _, scope := range req.Scopes {
+		if !allowed[scope] {
+			writeError(w, http.StatusBadRequest, "validation", "unknown scope "+scope)
+			return
+		}
+		if tc.Role != "owner" && (scope == "admin" || scope == "integrations:manage" || scope == "workspace:write") {
+			writeError(w, http.StatusForbidden, "forbidden", "role cannot grant "+scope)
+			return
+		}
+	}
+	plain, k, err := auth.IssueAPIKeyWithOptions(r.Context(), s.DB, u, req.Name, req.Scopes, expiresAt)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "internal", err.Error())
 		return
@@ -506,6 +863,51 @@ func (s *Server) handleIssueAPIKey(w http.ResponseWriter, r *http.Request) {
 		"key":     plain,
 		"api_key": k,
 	})
+}
+
+func (s *Server) handleListAPIKeys(w http.ResponseWriter, r *http.Request) {
+	tc := tenant.MustFrom(r.Context())
+	keys, err := auth.ListAPIKeys(r.Context(), s.DB, tc)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal", err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"api_keys": keys})
+}
+
+func (s *Server) handleRevokeAPIKey(w http.ResponseWriter, r *http.Request) {
+	tc := tenant.MustFrom(r.Context())
+	if err := auth.RevokeAPIKey(r.Context(), s.DB, tc, chi.URLParam(r, "id")); err != nil {
+		writeError(w, http.StatusNotFound, "not_found", "api key not found")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) handleRenameAPIKey(w http.ResponseWriter, r *http.Request) {
+	tc := tenant.MustFrom(r.Context())
+	var req struct {
+		Name string `json:"name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "bad_request", err.Error())
+		return
+	}
+	if err := auth.RenameAPIKey(r.Context(), s.DB, tc, chi.URLParam(r, "id"), req.Name); err != nil {
+		writeError(w, http.StatusBadRequest, "validation", err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) handleRotateAPIKey(w http.ResponseWriter, r *http.Request) {
+	tc := tenant.MustFrom(r.Context())
+	raw, key, err := auth.RotateAPIKey(r.Context(), s.DB, tc, chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "not_found", "api key not found")
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{"key": raw, "api_key": key})
 }
 
 // -------------------------- Helpers --------------------------

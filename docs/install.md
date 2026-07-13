@@ -31,7 +31,7 @@ What this does:
 
 ```bash
 # Pin a specific version
-curl -sSL .../install.sh | bash -s -- --version v0.4.1
+curl -sSL .../install.sh | bash -s -- --version v1.0.0
 
 # User-local install (no sudo)
 curl -sSL .../install.sh | bash -s -- --to ~/.local/bin
@@ -51,28 +51,28 @@ curl -sSL .../install.sh | bash -s -- --print-checksum
 
 ```bash
 ttl version
-# ttl 0.4.1 (commit ..., built ...)
+# ttl v1.0.0 (commit ..., built ...)
 
 # and the server's built-in version endpoint
 ttl serve &
 curl -s http://localhost:8093/version
-# {"version":"0.4.1","built":"...","go":"go1.25.0"}
+# {"version":"v1.0.0","built":"...","go":"go1.25.0"}
 ```
 
 ## 2. `go install`
 
-If you have Go 1.22+:
+If you have Go 1.25+:
 
 ```bash
 go install github.com/anirudh-777/ttl/cmd/ttl@latest
 # or pin:
-go install github.com/anirudh-777/ttl/cmd/ttl@v0.4.1
+go install github.com/anirudh-777/ttl/cmd/ttl@v1.0.0
 ```
 
 The binary lands in `$GOBIN` (default `~/go/bin`). Make sure that's
 on your `PATH`.
 
-## 3. Homebrew
+## 3. Homebrew (planned)
 
 Once a tap is published:
 
@@ -80,22 +80,18 @@ Once a tap is published:
 brew install anirudh-777/tap/ttl
 ```
 
-Until then, you can install directly from the formula in the repo:
-
-```bash
-brew install --build-from-source deploy/homebrew/ttl.rb
-```
-
-The formula is set up to download release binaries (not build from
-source), so the install is fast.
+The repository includes a formula template under `deploy/homebrew/`, but it is
+not installable until release checksums are substituted and the tap is published.
 
 ## 4. Docker
 
 ```bash
+git clone https://github.com/anirudh-777/ttl && cd ttl
+make docker
 docker run --rm -it \
   -p 8093:8093 \
   -v ~/.local/share/ttl:/data \
-  ghcr.io/anirudh-777/ttl:latest
+  ttl:dev
 ```
 
 The image is ~20 MB (distroless). Web UI at `http://localhost:8093/`.

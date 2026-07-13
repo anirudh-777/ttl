@@ -56,15 +56,19 @@
     const cls = t.status === 'done' ? 'title done' : 'title';
     // Layout: [checkbox] [pri] [title + meta] [del]
     // Title and meta share a column that wraps on narrow screens.
+    const deleted = !!t.deleted_at;
+    const actions = deleted
+      ? '<button class="secondary small" data-act="restore">restore</button><button class="del" data-act="purge" title="permanently delete">purge</button>'
+      : '<button class="del" data-act="del" title="move to trash">x</button>';
     return `
       <li data-id="${t.id}">
-        <input type="checkbox" ${t.status === 'done' ? 'checked' : ''} data-act="toggle">
+        ${deleted ? '' : `<input type="checkbox" ${t.status === 'done' ? 'checked' : ''} data-act="toggle">`}
         <span class="pri">${priLabel(t.priority)}</span>
         <div class="body">
-          <span class="${cls}">${escapeHTML(t.title)}</span>
+          <button class="task-title-button ${cls}" data-act="edit">${escapeHTML(t.title)}</button>
           <span class="meta">${fmtDue(t.due_at)} ${tags}</span>
         </div>
-        <button class="del" data-act="del" title="delete">x</button>
+        ${actions}
       </li>`;
   }
 
@@ -153,6 +157,7 @@
   }
 
   function wireList(root) {
+    $$('[data-act="edit"]', root).forEach((b) => b.addEventListener('click', (e) => openTaskEditor(e.target.closest('li').dataset.id)));
     $$('input[data-act="toggle"]', root).forEach((cb) => {
       cb.addEventListener('change', async (e) => {
         const li = e.target.closest('li');
@@ -167,12 +172,73 @@
       b.addEventListener('click', async (e) => {
         const li = e.target.closest('li');
         const id = li.dataset.id;
-        if (!confirm('Delete this task?')) return;
+        if (!confirm('Move this task to trash?')) return;
         try {
           await api('DELETE', '/api/v1/tasks/' + id);
           await boot();
         } catch (err) { alert(err.message); }
       });
+    });
+    $$('button[data-act="restore"]', root).forEach((b) => b.addEventListener('click', async (e) => {
+      try { await api('POST', '/api/v1/tasks/' + e.target.closest('li').dataset.id + '/restore'); await boot(); }
+      catch (err) { alert(err.message); }
+    }));
+    $$('button[data-act="purge"]', root).forEach((b) => b.addEventListener('click', async (e) => {
+      if (!confirm('Permanently delete this task? This cannot be undone.')) return;
+      try { await api('DELETE', '/api/v1/tasks/' + e.target.closest('li').dataset.id + '/purge'); await boot(); }
+      catch (err) { alert(err.message); }
+    }));
+  }
+
+  async function openTaskEditor(id) {
+    const dialog = $('#task-dialog');
+    const form = $('#task-edit-form');
+    try {
+      const t = await api('GET', '/api/v1/tasks/' + id);
+      form.elements.id.value = t.id;
+      form.elements.title.value = t.title || '';
+      form.elements.notes.value = t.notes || '';
+      form.elements.priority.value = String(t.priority || 0);
+      form.elements.tags.value = (t.tags || []).join(',');
+      form.elements.repeat.value = t.recurrence_rrule || '';
+      form.elements.due.value = t.due_at ? new Date(t.due_at).toISOString().slice(0, 16) : '';
+      $('#subtask-list').innerHTML = (t.subtasks || []).map(renderTask).join('');
+      wireList($('#subtask-list'));
+      if (!dialog.open) dialog.showModal();
+    } catch (err) { alert(err.message); }
+  }
+
+  function wireTaskEditor() {
+    const dialog = $('#task-dialog');
+    const form = $('#task-edit-form');
+    $('[data-act="cancel-edit"]', dialog).addEventListener('click', () => dialog.close());
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const due = form.elements.due.value;
+      const body = {
+        title: form.elements.title.value.trim(), notes: form.elements.notes.value,
+        priority: Number(form.elements.priority.value), due_at: due ? new Date(due).getTime() : null,
+        tags: form.elements.tags.value.split(',').map((s) => s.trim()).filter(Boolean),
+        recurrence_rrule: form.elements.repeat.value || null,
+      };
+      try { await api('PATCH', '/api/v1/tasks/' + form.elements.id.value, body); dialog.close(); await boot(); }
+      catch (err) { alert(err.message); }
+    });
+    $('#subtask-form', dialog).addEventListener('submit', async (e) => {
+      e.preventDefault(); const title = e.target.elements.title.value.trim(); if (!title) return;
+      try {
+		const created = await api('POST', '/api/v1/tasks', { title, priority: 0, parent_id: form.elements.id.value });
+		e.target.reset();
+		const list = $('#subtask-list');
+		list.insertAdjacentHTML('beforeend', renderTask(created));
+		wireList(list.lastElementChild);
+	  }
+      catch (err) { alert(err.message); }
+    });
+    $('#reminder-form', dialog).addEventListener('submit', async (e) => {
+      e.preventDefault(); const at = e.target.elements.at.value;
+      try { await api('POST', '/api/v1/reminders', { task_id: form.elements.id.value, fire_at: new Date(at).getTime() }); e.target.reset(); alert('Reminder scheduled'); }
+      catch (err) { alert(err.message); }
     });
   }
 
@@ -184,12 +250,17 @@
       const title = form.elements['title'].value.trim();
       if (!title) return;
       const body = { title, priority: 0 };
+	  if (params && params.project_id) body.project_id = params.project_id;
       const tagsRaw = form.elements['tags'] ? form.elements['tags'].value.trim() : '';
       if (tagsRaw) body.tags = tagsRaw.split(',').map((s) => s.trim()).filter(Boolean);
       const dueRaw = form.elements['due'] ? form.elements['due'].value.trim() : '';
       if (dueRaw) {
         const t = new Date(dueRaw);
         if (!isNaN(t)) body.due_at = t.getTime();
+	  } else if (params && params.view === 'today') {
+		const today = new Date();
+		today.setHours(12, 0, 0, 0);
+		body.due_at = today.getTime();
       }
       try {
         await api('POST', '/api/v1/tasks', body);
@@ -218,12 +289,10 @@
     let title, params = { status: 'open', limit: '500' };
     if (path.startsWith('/today')) {
       title = 'Today';
-      const today = new Date();
-      const end = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999);
-      params.status = 'open';
+      params = { view: 'today', limit: '500' };
       try {
-        const data = await api('GET', '/api/v1/tasks?status=open&limit=500');
-        const filtered = (data.tasks || []).filter((t) => t.due_at && new Date(t.due_at) <= end);
+        const data = await api('GET', '/api/v1/tasks?view=today&limit=500');
+        const filtered = data.tasks || [];
         const wl = await fetchWorklog();
         main.innerHTML = composerHTML(title) +
           '<section class="worklog" id="worklog"></section>' +
@@ -247,11 +316,22 @@
       }
     } else if (path.startsWith('/inbox')) {
       title = 'Inbox';
-      params.parent_id = 'root';
+      params = { view: 'inbox', limit: '500' };
       await renderMain(main, title, params);
       highlightNav('inbox');
+    } else if (path.startsWith('/upcoming')) {
+      await renderMain(main, 'Upcoming', { view: 'upcoming', limit: '500' }); highlightNav('upcoming');
+    } else if (path.startsWith('/next')) {
+      await renderMain(main, 'Next', { view: 'next', limit: '50' }); highlightNav('next');
+    } else if (path.startsWith('/done')) {
+      await renderMain(main, 'Done', { view: 'done', limit: '500' }); highlightNav('done');
+    } else if (path.startsWith('/trash')) {
+      await renderMain(main, 'Trash', { view: 'trash', limit: '500' }); highlightNav('trash');
+    } else if (path.startsWith('/projects/')) {
+	  await renderProjectDetail(main, decodeURIComponent(path.slice('/projects/'.length)));
+	  highlightNav('projects');
     } else if (path.startsWith('/projects')) {
-      await renderProjects(main);
+	  await renderProjects(main);
       highlightNav('projects');
     } else if (path.startsWith('/settings')) {
       await renderSettings(main);
@@ -262,8 +342,9 @@
   }
 
   async function renderMain(main, title, params) {
-    main.innerHTML = composerHTML(title) + '<div id="taskhost"></div>';
-    composer(main, params);
+	const canCreate = params && params.view === 'inbox';
+	main.innerHTML = (canCreate ? composerHTML(title) : '<h2>' + escapeHTML(title) + '</h2>') + '<div id="taskhost"></div>';
+	if (canCreate) composer(main, params);
     await renderList($('#taskhost', main), params);
   }
 
@@ -303,24 +384,83 @@
     }
   }
 
+  async function renderProjectDetail(main, id) {
+	try {
+	  const data = await api('GET', '/api/v1/projects');
+	  const project = (data.projects || []).find((p) => p.id === id);
+	  if (!project) throw new Error('Project not found');
+	  main.innerHTML = `
+		<div class="page-heading"><h2>${escapeHTML(project.name)}</h2><div>
+		  <button class="secondary small" id="project-rename">Rename</button>
+		  <button class="secondary small" id="project-archive">Archive</button>
+		</div></div>
+		${composerHTML('Add task')}
+		<div id="taskhost"></div>`;
+	  const params = { project_id: id, status: 'open', limit: '500' };
+	  composer(main, params);
+	  await renderList($('#taskhost', main), params);
+	  $('#project-rename', main).addEventListener('click', async () => {
+		const name = prompt('Project name', project.name);
+		if (!name || !name.trim()) return;
+		try { await api('PATCH', '/api/v1/projects/' + id, { name: name.trim(), color: project.color || '#888888' }); await boot(); }
+		catch (err) { alert(err.message); }
+	  });
+	  $('#project-archive', main).addEventListener('click', async () => {
+		if (!confirm('Archive this project? Its tasks will remain available.')) return;
+		try { await api('POST', '/api/v1/projects/' + id + '/archive'); window.location.href = '/projects'; }
+		catch (err) { alert(err.message); }
+	  });
+	} catch (err) {
+	  main.innerHTML = '<div class="empty error">' + escapeHTML(err.message) + '</div>';
+	}
+  }
+
   async function renderSettings(main) {
     try {
+      const [keyData, memberData] = await Promise.all([
+        api('GET', '/api/v1/api-keys').catch(() => ({ api_keys: [] })),
+        api('GET', '/api/v1/members').catch(() => ({ members: [] })),
+      ]);
       main.innerHTML = `
         <h2>Settings</h2>
-        <p class="muted">Issue an API key for the CLI / MCP / scripts.</p>
+        <h3>API keys</h3>
+        <p class="muted">Issue a least-privilege key for an agent or script.</p>
         <form id="key-form">
           <label>Name <input name="name" value="cli" required></label>
+          <label>Scopes <input name="scopes" value="tasks:read,tasks:write" required></label>
           <button type="submit">Issue API key</button>
         </form>
         <pre id="key-result" class="ok"></pre>
+		<ul class="tasklist" id="key-list">${(keyData.api_keys || []).map(renderKey).join('')}</ul>
+        <h3>Members</h3>
+        <ul class="tasklist">${(memberData.members || []).map((m) => `<li><span class="title">${escapeHTML(m.email)}</span><span class="meta">${escapeHTML(m.role)}</span></li>`).join('')}</ul>
+        <form id="invite-form"><label>Role <select name="role"><option>member</option><option>admin</option></select></label><button type="submit">Create 7-day invite</button></form>
+        <pre id="invite-result" class="ok"></pre>
         <p><button class="secondary" id="logout-btn">Log out</button></p>`;
       $('#key-form', main).addEventListener('submit', async (e) => {
         e.preventDefault();
         const name = e.target.elements['name'].value.trim();
+        const scopes = e.target.elements['scopes'].value.split(',').map((s) => s.trim()).filter(Boolean);
         try {
-          const r = await api('POST', '/api/v1/api-keys', { name });
+          const r = await api('POST', '/api/v1/api-keys', { name, scopes });
           $('#key-result', main).textContent = 'API key (save this, shown once):\n' + r.key;
+		  const list = $('#key-list', main);
+		  list.insertAdjacentHTML('afterbegin', renderKey(r.api_key));
+		  wireKeyRevocation(list.firstElementChild);
         } catch (err) { alert(err.message); }
+      });
+	  wireKeyRevocation(main);
+
+	  function wireKeyRevocation(root) {
+		$$('[data-act="revoke-key"]', root).forEach((b) => b.addEventListener('click', async (e) => {
+        if (!confirm('Revoke this API key?')) return;
+        await api('DELETE', '/api/v1/api-keys/' + e.target.closest('li').dataset.keyId); await boot();
+		}));
+	  }
+      $('#invite-form', main).addEventListener('submit', async (e) => {
+        e.preventDefault();
+        try { const r = await api('POST', '/api/v1/invites', { role: e.target.elements['role'].value }); $('#invite-result', main).textContent = 'Invite token (shown once):\n' + r.token; }
+        catch (err) { alert(err.message); }
       });
       $('#logout-btn', main).addEventListener('click', async () => {
         await api('POST', '/api/v1/auth/logout');
@@ -331,11 +471,17 @@
     }
   }
 
+  function renderKey(k) {
+	return `<li data-key-id="${k.id}"><span class="title">${escapeHTML(k.name)}</span><span class="meta">${escapeHTML((k.scopes || []).join(', '))}</span><button class="del" data-act="revoke-key">revoke</button></li>`;
+  }
+
   function highlightNav(active) {
     $$('.topbar nav a').forEach((a) => {
       if (a.getAttribute('href').startsWith('/' + active)) a.classList.add('active');
     });
   }
+
+  if ($('#task-dialog')) wireTaskEditor();
 
   // ---- Auth (login.html) ----
   function bootAuth() {
@@ -368,8 +514,9 @@
       const tenant_name = signupForm.elements['tenant_name'].value.trim();
       const email = signupForm.elements['email'].value.trim();
       const password = signupForm.elements['password'].value;
+      const invite_token = signupForm.elements['invite_token'].value.trim();
       try {
-        await api('POST', '/api/v1/auth/signup', { tenant_name, email, password });
+        await api('POST', '/api/v1/auth/signup', { tenant_name, email, password, invite_token });
         window.location.href = '/today';
       } catch (err) { $('#signup-error').textContent = err.message; }
     });

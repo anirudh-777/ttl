@@ -34,8 +34,13 @@ import (
 type View string
 
 const (
-	ViewToday View = "today"
-	ViewInbox View = "inbox"
+	ViewToday    View = "today"
+	ViewInbox    View = "inbox"
+	ViewUpcoming View = "upcoming"
+	ViewOverdue  View = "overdue"
+	ViewNext     View = "next"
+	ViewDone     View = "done"
+	ViewTrash    View = "trash"
 )
 
 // Run starts the TUI. Blocks until the user quits.
@@ -55,6 +60,7 @@ type tuiItem struct {
 	due      *time.Time
 	tags     []string
 	done     bool
+	deleted  bool
 }
 
 func (i tuiItem) Title() string {
@@ -83,6 +89,7 @@ type tuiMode int
 const (
 	modeList tuiMode = iota
 	modeAdd
+	modeEdit
 	modeConfirmDelete
 )
 
@@ -93,9 +100,12 @@ type tuiModel struct {
 	mode   tuiMode
 	input  textinput.Model
 	status string
+	active *model.TimeEntry
 	width  int
 	height int
 }
+
+type taskMutationMsg struct{ err error }
 
 func newTuiModel(c *client.Client, view View) *tuiModel {
 	delegate := list.NewDefaultDelegate()
@@ -119,6 +129,8 @@ func (m *tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch m.mode {
 	case modeAdd:
 		return m.updateAdd(msg)
+	case modeEdit:
+		return m.updateEdit(msg)
 	case modeConfirmDelete:
 		return m.updateConfirmDelete(msg)
 	default:
@@ -128,6 +140,14 @@ func (m *tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m *tuiModel) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case taskMutationMsg:
+		if msg.err != nil {
+			m.status = "error: " + msg.err.Error()
+			return m, nil
+		}
+		m.refresh()
+		m.status = "saved"
+		return m, nil
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		m.list.SetSize(msg.Width, msg.Height-2)
@@ -141,10 +161,18 @@ func (m *tuiModel) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.input.Focus()
 			m.status = "type a task title, enter to save, esc to cancel"
 			return m, nil
+		case "e":
+			if it, ok := m.list.SelectedItem().(tuiItem); ok && !it.deleted {
+				m.mode = modeEdit
+				m.input.Prompt = "edit title> "
+				m.input.SetValue(it.title)
+				m.input.Focus()
+				return m, nil
+			}
 		case " ":
 			if it, ok := m.list.SelectedItem().(tuiItem); ok && !it.done {
-				go m.completeTask(it.id)
-				return m, nil
+				m.status = "saving..."
+				return m, m.completeTaskCmd(it.id)
 			}
 		case "d":
 			if _, ok := m.list.SelectedItem().(tuiItem); ok {
@@ -156,6 +184,17 @@ func (m *tuiModel) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.refresh()
 			m.status = "refreshed"
 			return m, nil
+		case "1", "2", "3", "4", "5", "6", "7":
+			views := map[string]View{"1": ViewInbox, "2": ViewToday, "3": ViewUpcoming, "4": ViewOverdue, "5": ViewNext, "6": ViewDone, "7": ViewTrash}
+			m.view = views[msg.String()]
+			m.list.Title = string(m.view)
+			m.refresh()
+			return m, nil
+		case "u":
+			if it, ok := m.list.SelectedItem().(tuiItem); ok && it.deleted {
+				m.status = "restoring..."
+				return m, m.restoreTaskCmd(it.id)
+			}
 		}
 	}
 	var cmd tea.Cmd
@@ -176,7 +215,12 @@ func (m *tuiModel) updateAdd(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			title := strings.TrimSpace(m.input.Value())
 			if title != "" {
-				go m.addTask(title)
+				cmd := m.addTaskCmd(title)
+				m.mode = modeList
+				m.input.Blur()
+				m.input.SetValue("")
+				m.status = "saving..."
+				return m, cmd
 			}
 			m.mode = modeList
 			m.input.Blur()
@@ -190,11 +234,39 @@ func (m *tuiModel) updateAdd(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+func (m *tuiModel) updateEdit(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if km, ok := msg.(tea.KeyMsg); ok {
+		switch km.String() {
+		case "esc":
+			m.mode = modeList
+			m.input.Blur()
+			m.input.SetValue("")
+			m.input.Prompt = "new task> "
+			return m, nil
+		case "enter":
+			title := strings.TrimSpace(m.input.Value())
+			if it, ok := m.list.SelectedItem().(tuiItem); ok && title != "" {
+				m.mode = modeList
+				m.input.Blur()
+				m.input.SetValue("")
+				m.input.Prompt = "new task> "
+				m.status = "saving..."
+				return m, m.editTaskCmd(it.id, title)
+			}
+		}
+	}
+	var cmd tea.Cmd
+	m.input, cmd = m.input.Update(msg)
+	return m, cmd
+}
+
 func (m *tuiModel) updateConfirmDelete(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if km, ok := msg.(tea.KeyMsg); ok {
 		if km.String() == "y" {
 			if it, ok := m.list.SelectedItem().(tuiItem); ok {
-				go m.deleteTask(it.id)
+				m.mode = modeList
+				m.status = "deleting..."
+				return m, m.deleteTaskCmd(it.id)
 			}
 		}
 		m.mode = modeList
@@ -207,7 +279,7 @@ func (m *tuiModel) View() string {
 	header := lipgloss.NewStyle().Bold(true).Render(strings.ToUpper(string(m.view)))
 	body := m.list.View()
 	status := m.status
-	if m.mode == modeAdd {
+	if m.mode == modeAdd || m.mode == modeEdit {
 		status = m.input.View()
 	}
 	active := m.activeLine()
@@ -216,8 +288,8 @@ func (m *tuiModel) View() string {
 
 // activeLine renders the running-timer indicator if any.
 func (m *tuiModel) activeLine() string {
-	e, err := m.c.ActiveTimer(context.Background())
-	if err != nil || e == nil {
+	e := m.active
+	if e == nil {
 		return ""
 	}
 	elapsed := time.Since(e.StartedAt).Round(time.Second)
@@ -235,27 +307,11 @@ func (m *tuiModel) activeLine() string {
 // -------------------------- async actions --------------------------
 
 func (m *tuiModel) refresh() {
-	opts := client.ListOpts{Status: "open", Limit: 500}
-	if m.view == ViewInbox {
-		empty := "root"
-		opts.ParentID = empty
-	}
+	opts := client.ListOpts{Limit: 500, View: string(m.view)}
 	tasks, err := m.c.ListTasks(context.Background(), opts)
 	if err != nil {
 		m.status = "error: " + err.Error()
 		return
-	}
-	if m.view == ViewToday {
-		now := time.Now()
-		end := time.Date(now.Year(), now.Month(), now.Day(), 23, 59, 59, 0, now.Location())
-		var filtered []model.Task
-		for _, t := range tasks {
-			if t.DueAt == nil || t.DueAt.After(end) {
-				continue
-			}
-			filtered = append(filtered, t)
-		}
-		tasks = filtered
 	}
 	items := make([]list.Item, 0, len(tasks))
 	for _, t := range tasks {
@@ -265,21 +321,36 @@ func (m *tuiModel) refresh() {
 			priority: t.Priority,
 			due:      t.DueAt,
 			tags:     t.Tags,
+			deleted:  t.DeletedAt != nil,
+			done:     t.Status == "done",
 		})
 	}
 	m.list.SetItems(items)
+	m.active, _ = m.c.ActiveTimer(context.Background())
 }
 
-func (m *tuiModel) completeTask(id string) {
-	_, _ = m.c.CompleteTask(context.Background(), id)
+func (m *tuiModel) completeTaskCmd(id string) tea.Cmd {
+	return func() tea.Msg { _, err := m.c.CompleteTask(context.Background(), id); return taskMutationMsg{err: err} }
 }
 
-func (m *tuiModel) deleteTask(id string) {
-	_ = m.c.DeleteTask(context.Background(), id)
+func (m *tuiModel) deleteTaskCmd(id string) tea.Cmd {
+	return func() tea.Msg { return taskMutationMsg{err: m.c.DeleteTask(context.Background(), id)} }
 }
 
-func (m *tuiModel) addTask(title string) {
-	_, _ = m.c.CreateTask(context.Background(), client.CreateTaskOpts{
-		Title: title, Priority: 0,
-	})
+func (m *tuiModel) restoreTaskCmd(id string) tea.Cmd {
+	return func() tea.Msg { _, err := m.c.RestoreTask(context.Background(), id); return taskMutationMsg{err: err} }
+}
+
+func (m *tuiModel) addTaskCmd(title string) tea.Cmd {
+	return func() tea.Msg {
+		_, err := m.c.CreateTask(context.Background(), client.CreateTaskOpts{Title: title, Priority: 0})
+		return taskMutationMsg{err: err}
+	}
+}
+
+func (m *tuiModel) editTaskCmd(id, title string) tea.Cmd {
+	return func() tea.Msg {
+		_, err := m.c.UpdateTask(context.Background(), id, map[string]any{"title": title})
+		return taskMutationMsg{err: err}
+	}
 }

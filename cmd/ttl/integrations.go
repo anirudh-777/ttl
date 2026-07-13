@@ -3,7 +3,6 @@
 package main
 
 import (
-	"bufio"
 	"context"
 	"fmt"
 	"os"
@@ -35,7 +34,7 @@ var integrationsAddCmd = &cobra.Command{
 		if label == "" {
 			label = provider
 		}
-		token, err := promptSecret(cmd.OutOrStdout(), "Personal Access Token (or API key): ")
+		token, err := promptSecret(cmd.InOrStdin(), cmd.OutOrStdout(), "Personal Access Token (or API key): ")
 		if err != nil {
 			return err
 		}
@@ -46,14 +45,13 @@ var integrationsAddCmd = &cobra.Command{
 		cfg := map[string]string{"token": token}
 		if provider == "github" {
 			fmt.Fprint(cmd.OutOrStdout(), "GitHub login (optional, press Enter to skip): ")
-			reader := bufio.NewReader(cmd.InOrStdin())
-			login, _ := reader.ReadString('\n')
+			login, _ := readLine(cmd.InOrStdin())
 			login = strings.TrimSpace(login)
 			if login != "" {
 				cfg["login"] = login
 			}
 		}
-		secret, err := promptSecret(cmd.OutOrStdout(), "Webhook secret (Enter to skip): ")
+		secret, err := promptSecret(cmd.InOrStdin(), cmd.OutOrStdout(), "Webhook secret (Enter to skip): ")
 		if err != nil {
 			return err
 		}

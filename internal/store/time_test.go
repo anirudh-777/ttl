@@ -150,3 +150,25 @@ func TestActiveTimerLookup(t *testing.T) {
 		t.Errorf("active = %+v, want id %s", got, e.ID)
 	}
 }
+
+func TestPomodoroAutoStopsAtDeadline(t *testing.T) {
+	d := openTestDB(t)
+	st := store.New(d)
+	u := signup(t, d, "pomodoro@test.local", "Pomodoro")
+	tc := &tenant.Context{TenantID: u.TenantID, UserID: u.ID, Role: u.Role}
+	entry, err := st.StartTimedEntry(context.Background(), tc, nil, "pomodoro", "focus", time.Millisecond)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stopped, err := st.StopExpiredTimers(context.Background(), time.Now().Add(time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(stopped) != 1 || stopped[0].ID != entry.ID || stopped[0].EndedAt == nil {
+		t.Fatalf("stopped=%+v", stopped)
+	}
+	active, err := st.ActiveTimeEntry(context.Background(), tc)
+	if err != nil || active != nil {
+		t.Fatalf("active=%+v err=%v", active, err)
+	}
+}

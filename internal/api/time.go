@@ -15,9 +15,10 @@ import (
 // -------------------------- Timer --------------------------
 
 type timerStartReq struct {
-	TaskID string `json:"task_id"` // optional
-	Kind   string `json:"kind"`    // work | pomodoro
-	Note   string `json:"note"`
+	TaskID  string `json:"task_id"` // optional
+	Kind    string `json:"kind"`    // work | pomodoro
+	Note    string `json:"note"`
+	Minutes int    `json:"minutes"`
 }
 
 func (s *Server) handleTimerStart(w http.ResponseWriter, r *http.Request) {
@@ -40,7 +41,14 @@ func (s *Server) handleTimerStart(w http.ResponseWriter, r *http.Request) {
 		taskID = &id
 	}
 
-	e, err := s.Store.StartTimeEntry(r.Context(), tc, taskID, req.Kind, req.Note)
+	var planned time.Duration
+	if req.Kind == "pomodoro" {
+		if req.Minutes <= 0 {
+			req.Minutes = 25
+		}
+		planned = time.Duration(req.Minutes) * time.Minute
+	}
+	e, err := s.Store.StartTimedEntry(r.Context(), tc, taskID, req.Kind, req.Note, planned)
 	if err != nil {
 		if errors.Is(err, store.ErrTimerAlreadyRunning) {
 			writeError(w, http.StatusConflict, "timer_already_running", err.Error())

@@ -25,12 +25,13 @@
         <label>Workspace <input name="tenant_name" required></label>
         <label>Email <input name="email" type="email" required></label>
         <label>Password <input name="password" type="password" minlength="6" required></label>
+        <label>Invite token <input name="invite_token" autocomplete="off" placeholder="Required after initial setup"></label>
         <button type="submit">Create</button>
         <small class="error" id="signup-error"></small>
       </form>
     </article>
   </main>
-  <script src="/app.js"></script>
+  <script src="/app.js?v=20260713-v1"></script>
   <script>window.ttl.bootAuth()</script>
 </body>
 </html>

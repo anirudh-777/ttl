@@ -27,6 +27,10 @@ var (
 // if the user already has an open entry. If taskID is non-nil it is
 // stored as the task under focus.
 func (s *Store) StartTimeEntry(ctx context.Context, tc *tenant.Context, taskID *string, kind, note string) (*model.TimeEntry, error) {
+	return s.StartTimedEntry(ctx, tc, taskID, kind, note, 0)
+}
+
+func (s *Store) StartTimedEntry(ctx context.Context, tc *tenant.Context, taskID *string, kind, note string, planned time.Duration) (*model.TimeEntry, error) {
 	if kind == "" {
 		kind = "work"
 	}
@@ -46,12 +50,16 @@ func (s *Store) StartTimeEntry(ctx context.Context, tc *tenant.Context, taskID *
 
 	id := uuid.NewString()
 	now := time.Now()
+	var target any
+	if planned > 0 {
+		target = now.Add(planned).UnixMilli()
+	}
 	_, err = s.DB.ExecContext(ctx,
 		`INSERT INTO time_entries(id, tenant_id, user_id, task_id, kind,
-		                         started_at, duration_ms, note)
-		 VALUES (?, ?, ?, ?, ?, ?, 0, ?)`,
+		                         started_at, duration_ms, note, planned_duration_ms, target_end_at)
+		 VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`,
 		id, tc.TenantID, tc.UserID, taskID, kind,
-		now.UnixMilli(), note,
+		now.UnixMilli(), note, planned.Milliseconds(), target,
 	)
 	if err != nil {
 		// Race: another concurrent start won. Surface a friendly error.
@@ -65,6 +73,47 @@ func (s *Store) StartTimeEntry(ctx context.Context, tc *tenant.Context, taskID *
 		return nil, err
 	}
 	return t, nil
+}
+
+func (s *Store) StopExpiredTimers(ctx context.Context, now time.Time) ([]model.TimeEntry, error) {
+	rows, err := s.DB.QueryContext(ctx, `SELECT id, tenant_id, user_id, started_at, target_end_at FROM time_entries WHERE ended_at IS NULL AND target_end_at IS NOT NULL AND target_end_at <= ?`, now.UnixMilli())
+	if err != nil {
+		return nil, err
+	}
+	type due struct {
+		id, tenantID, userID string
+		started, target      int64
+	}
+	var items []due
+	for rows.Next() {
+		var v due
+		if err := rows.Scan(&v.id, &v.tenantID, &v.userID, &v.started, &v.target); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		items = append(items, v)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	var out []model.TimeEntry
+	for _, v := range items {
+		res, err := s.DB.ExecContext(ctx, `UPDATE time_entries SET ended_at = ?, duration_ms = ? WHERE id = ? AND ended_at IS NULL`, v.target, v.target-v.started, v.id)
+		if err != nil {
+			return nil, err
+		}
+		n, _ := res.RowsAffected()
+		if n == 0 {
+			continue
+		}
+		tc := &tenant.Context{TenantID: v.tenantID, UserID: v.userID}
+		e, err := s.GetTimeEntry(ctx, tc, v.id)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *e)
+	}
+	return out, nil
 }
 
 // StopTimeEntry closes the user's open entry. Returns ErrNoActiveTimer
@@ -270,6 +319,7 @@ type DailyTaskTotal struct {
 const timeEntrySelect = `
 SELECT te.id, te.tenant_id, te.user_id, te.task_id, te.kind,
        te.started_at, te.ended_at, te.duration_ms, te.note,
+       te.planned_duration_ms, te.target_end_at,
        t.title
 FROM time_entries te
 LEFT JOIN tasks t ON t.id = te.task_id
@@ -277,15 +327,16 @@ LEFT JOIN tasks t ON t.id = te.task_id
 
 func scanTimeEntry(r rowScanner) (*model.TimeEntry, error) {
 	var (
-		e       model.TimeEntry
-		taskID  sql.NullString
-		endedAt sql.NullInt64
-		started int64
-		title   sql.NullString
+		e         model.TimeEntry
+		taskID    sql.NullString
+		endedAt   sql.NullInt64
+		targetEnd sql.NullInt64
+		started   int64
+		title     sql.NullString
 	)
 	if err := r.Scan(
 		&e.ID, &e.TenantID, &e.UserID, &taskID, &e.Kind,
-		&started, &endedAt, &e.DurationMs, &e.Note, &title,
+		&started, &endedAt, &e.DurationMs, &e.Note, &e.PlannedDurationMs, &targetEnd, &title,
 	); err != nil {
 		return nil, err
 	}
@@ -297,6 +348,10 @@ func scanTimeEntry(r rowScanner) (*model.TimeEntry, error) {
 		e.TaskTitle = title.String
 	}
 	e.StartedAt = time.UnixMilli(started)
+	if targetEnd.Valid {
+		v := time.UnixMilli(targetEnd.Int64)
+		e.TargetEndAt = &v
+	}
 	if endedAt.Valid {
 		v := time.UnixMilli(endedAt.Int64)
 		e.EndedAt = &v

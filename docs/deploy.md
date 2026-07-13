@@ -140,6 +140,17 @@ already isolates the in-process implementation).
       shrinks it.
 - [ ] Set TTL_DATA_DIR and TTL_CONFIG_DIR explicitly in the systemd unit
       so multiple deployments can share a machine.
+- [ ] Set `TTL_SECURE_COOKIES=1` when TLS terminates in front of ttl.
+- [ ] Leave `TTL_ALLOWED_ORIGINS` unset for same-origin access, or provide an
+      explicit comma-separated allowlist.
+- [ ] Set `TTL_TRUST_PROXY=true` only when ttl is reachable exclusively through
+      your trusted reverse proxy; this lets login rate limiting use
+      `X-Forwarded-For`.
+- [ ] Review and revoke old API keys; prefer scoped keys with expirations for agents.
+- [ ] Treat the SQLite database as sensitive: reminder webhook signing secrets
+      are stored in it so the server can sign outbound requests.
+- [ ] Private and loopback reminder webhook targets are blocked by default. For
+      a trusted internal-only deployment, set `TTL_ALLOW_PRIVATE_WEBHOOKS=true`.
 
 ## Troubleshooting
 

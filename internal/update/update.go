@@ -4,6 +4,7 @@
 // Two surfaces:
 //
 //  1. Check() — asks GitHub's public API for the latest release tag.
+//
 //  2. MaybeNotice() — checks once per day, prints a one-line banner
 //     to stderr if a newer release is available. Cached so it doesn't
 //     hit the network on every command.
@@ -227,6 +228,8 @@ func Apply(ctx context.Context, repo, tag, destPath string) error {
 			return fmt.Errorf("resolve latest: %w", err)
 		}
 		tag = "v" + res.Latest
+	} else if !strings.HasPrefix(tag, "v") {
+		tag = "v" + tag
 	}
 	if destPath == "" {
 		var err error
