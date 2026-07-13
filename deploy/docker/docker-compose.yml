@@ -1,0 +1,27 @@
+services:
+  data-init:
+    image: busybox:1.37.0
+    command: ["chown", "-R", "65532:65532", "/data"]
+    restart: "no"
+    volumes:
+      - ttl-data:/data
+
+  ttl:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      data-init:
+        condition: service_completed_successfully
+    ports:
+      - "8093"
+    volumes:
+      - ttl-data:/data
+    environment:
+      TTL_DATA_DIR: /data
+      TTL_SECURE_COOKIES: "1"
+      TTL_TRUST_PROXY: "true"
+
+volumes:
+  ttl-data:

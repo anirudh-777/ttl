@@ -22,8 +22,6 @@ FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=build /out/ttl /usr/local/bin/ttl
 ENV TTL_DATA_DIR=/data
 EXPOSE 8093
-# Named volumes are created root-owned by Docker/Swarm. The distroless image
-# has no init process that can fix ownership before dropping privileges.
-USER root:root
+USER nonroot:nonroot
 ENTRYPOINT ["/usr/local/bin/ttl"]
 CMD ["serve", "--addr", ":8093", "--db", "/data/ttl.db"]
