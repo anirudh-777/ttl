@@ -22,7 +22,7 @@ import (
 )
 
 var (
-	version = "1.0.0"
+	version = "1.0.1"
 	commit  = "none"
 	date    = "unknown"
 )
@@ -59,7 +59,7 @@ func defaultArgs(argv []string) []string {
 	// Recognised top-level commands. Anything else (e.g. "task", "project")
 	// is routed under "cli".
 	switch argv[0] {
-	case "cli", "serve", "today", "inbox", "view", "mcp", "version", "update", "help", "-h", "--help":
+	case "cli", "serve", "today", "inbox", "view", "mcp", "agents", "version", "update", "help", "-h", "--help":
 		return argv
 	}
 	return append([]string{"cli"}, argv...)

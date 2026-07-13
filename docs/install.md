@@ -96,28 +96,26 @@ docker run --rm -it \
 
 The image is ~20 MB (distroless). Web UI at `http://localhost:8093/`.
 
-## Installing the agent skill (no binary needed)
+## Installing coding-agent support
 
-The skill is a single Markdown file that AI coding agents load for
-context. Install it separately:
-
-```bash
-curl -sSL https://raw.githubusercontent.com/anirudh-777/ttl/main/scripts/install-skill-remote.sh \
-  | bash -s -- all
-```
-
-Or pick one agent:
+After logging into a ttl server, install the embedded skill and register the
+local MCP server in detected coding agents:
 
 ```bash
-curl -sSL .../install-skill-remote.sh | bash -s -- claude
-curl -sSL .../install-skill-remote.sh | bash -s -- cursor
-curl -sSL .../install-skill-remote.sh | bash -s -- copilot
-curl -sSL .../install-skill-remote.sh | bash -s -- cline
+ttl login --server https://tasks.example.com
+ttl agents install
 ```
 
-Supports: Claude Code, Cursor, GitHub Copilot, Continue.dev,
-Windsurf, Cline / Roo-Cline, Aider, OpenAI Codex, plus a README.md
-fallback for agents with no skill system.
+Or select targets explicitly:
+
+```bash
+ttl agents install --agent claude
+ttl agents install --agent codex --agent cursor
+ttl agents install --all
+```
+
+Use `--skills-only` to avoid MCP changes, or `--dry-run` to preview them.
+Installs are user-scoped and preserve unrelated files and MCP entries.
 
 See `docs/agents.md` for the full per-agent guide.
 
@@ -127,8 +125,8 @@ See `docs/agents.md` for the full per-agent guide.
 # binary
 curl -sSL .../install.sh | bash         # re-run, picks up latest
 
-# skill (overwrites every installed copy)
-curl -sSL .../install-skill-remote.sh | bash -s -- all
+# coding-agent support
+ttl agents update
 ```
 
 ## Uninstalling
@@ -137,10 +135,8 @@ curl -sSL .../install-skill-remote.sh | bash -s -- all
 # binary
 curl -sSL .../install.sh | bash -s -- --uninstall
 
-# skill (uses the local install-skill.sh if available)
-curl -sSL .../install-skill-remote.sh | bash -s -- --uninstall
-# or directly, if you already cloned:
-./scripts/install-skill.sh --uninstall
+# coding-agent support (only ttl-owned resources)
+ttl agents uninstall
 ```
 
 ## Verifying releases

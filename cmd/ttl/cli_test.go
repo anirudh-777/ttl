@@ -19,6 +19,10 @@ func TestDefaultArgsPreservesShortcuts(t *testing.T) {
 	if len(got) != 1 || got[0] != "serve" {
 		t.Fatalf("got %v", got)
 	}
+	got = defaultArgs([]string{"agents", "status"})
+	if len(got) != 2 || got[0] != "agents" {
+		t.Fatalf("got %v", got)
+	}
 }
 
 func TestPinnedUpdateDoesNotRequireLatestReleaseLookup(t *testing.T) {

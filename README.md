@@ -12,6 +12,7 @@ $ ttl add "Ship the README" --due today -p 3
 $ ttl list
 $ ttl today                          # interactive TUI
 $ ttl mcp                            # expose tools to Claude / Cursor / Cline
+$ ttl agents install                 # install the skill + register MCP
 ```
 
 ## Why ttl exists
@@ -35,7 +36,7 @@ plugins, integrations, themes. Most of that surface area is unused for
 |---|---|---|
 | 1. MVP | done | CLI, REST, TUI (today/inbox), web UI, multi-tenant auth, cross-platform builds |
 | 2. Focus | done | Start/stop timer, Pomodoro, daily work-log, active-timer banner |
-| 3. AI + live | done | Recurring tasks (RRULE), reminders, WebSocket live updates, MCP server (10 tools) |
+| 3. AI + live | done | Recurring tasks (RRULE), reminders, WebSocket live updates, MCP server |
 | 4. Integrations | done | GitHub + Linear providers, webhook receiver with HMAC verification, two-way sync |
 | v1 readiness | done | Recoverable trash, smart views, complete agent CRUD, recurrence/reminders, scoped keys, team invites |
 
@@ -72,6 +73,7 @@ Open <http://localhost:8093/login> for the web UI.
 | Web | <http://localhost:8093/today> — smart views, task editing, projects, team and keys |
 | API | `curl -H "X-API-Key: ttk_..." http://localhost:8093/api/v1/tasks` |
 | MCP | `ttl mcp` — task CRUD, subtasks, reminders, timers, and smart views for agents |
+| Agent setup | `ttl agents install` — detect coding agents, install the skill, register MCP |
 | WebSocket | `ws://localhost:8093/api/v1/ws` — live events |
 
 ## Stack

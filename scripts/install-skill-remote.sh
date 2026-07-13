@@ -3,23 +3,6 @@
 # without cloning the repo.
 #
 # Usage:
-#   curl -sSL https://raw.githubusercontent.com/<owner>/ttl/main/skills/ttl/SKILL.md \
-#     | scripts/install-skill.sh -
-#
-# Or directly:
-#   bash <(curl -sSL https://raw.githubusercontent.com/<owner>/ttl/main/scripts/install-skill-remote.sh) all
-#
-# This is a thin wrapper that downloads skills/ttl/SKILL.md from a
-# known URL into a temp file and then re-execs install-skill.sh with
-# that temp file as SKILL_SRC.
-
-set -euo pipefail
-
-#!/usr/bin/env bash
-# scripts/install-skill-remote.sh — fetch the ttl skill into a coding agent
-# without cloning the repo.
-#
-# Usage:
 #   curl -sSL https://raw.githubusercontent.com/<owner>/ttl/main/scripts/install-skill-remote.sh \
 #     | bash -s -- all
 #   ... | bash -s -- claude
@@ -30,11 +13,23 @@ set -euo pipefail
 
 set -euo pipefail
 
+have_cmd() { command -v "$1" >/dev/null 2>&1; }
+
 REPO="${TTL_REPO:-anirudh-777/ttl}"
 BRANCH="${TTL_BRANCH:-main}"
 RAW="https://raw.githubusercontent.com/${REPO}/${BRANCH}/skills/ttl/SKILL.md"
 
 have_cmd curl || { echo "need curl" >&2; exit 1; }
+
+# v1.0.1+ embeds the skill and owns agent configuration directly.
+if have_cmd ttl && ttl agents --help >/dev/null 2>&1; then
+  case "${1:-}" in
+    ""|all) exec ttl agents install --all ;;
+    --uninstall|uninstall) exec ttl agents uninstall ;;
+    --list|list) exec ttl agents status ;;
+    *) exec ttl agents install --agent "$1" ;;
+  esac
+fi
 
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT

@@ -9,6 +9,16 @@ server speaking JSON-RPC 2.0 over stdio. Run it with `ttl mcp`.
 
 ## Setup
 
+The recommended setup is automatic:
+
+```bash
+ttl login --server https://tasks.example.com
+ttl agents install
+```
+
+This installs the ttl skill and registers `ttl mcp` in detected supported
+agents. The manual examples below remain useful for other MCP clients.
+
 ### Claude Desktop
 
 Edit `~/Library/Application Support/Claude/claude_desktop_config.json`

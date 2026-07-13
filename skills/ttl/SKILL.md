@@ -12,7 +12,7 @@ tracking, recurring tasks, reminders, and external integrations
 
 | Surface | When to use it |
 |---|---|
-| **MCP** (`ttl mcp`) | **Default for agents.** 10 tools, NDJSON streaming, structured errors. |
+| **MCP** (`ttl mcp`) | **Default for agents.** Structured task, project, reminder, timer, and administration tools. |
 | REST API | When MCP isn't available — same endpoints, JSON over HTTP. |
 | CLI (`ttl add`, `ttl list`, …) | Read-only inspection, scripting, shell pipelines. |
 | TUI / Web | Humans only. |
@@ -20,19 +20,12 @@ tracking, recurring tasks, reminders, and external integrations
 ## Start here
 
 ```bash
-# Is the server up?
-curl -s http://localhost:8093/health      # → {"status":"ok"}
-
-# Configured? (otherwise ask the user to run `ttl signup` or `ttl login`)
-cat ~/.config/ttl/config.json             # server_url, api_key, email
+# Configured? (otherwise ask the user to run `ttl login --server URL`)
+ttl config show
 ```
 
-If the server isn't running, **don't start it yourself** — ask the user to
-run `ttl serve` (or `ttl signup` to create a workspace first).
-
-If the CLI isn't configured but the server is reachable, the REST API works
-the same way — just send the same `X-API-Key: ttk_...` header the CLI would
-use.
+Never print or read the plaintext API key unless the user explicitly asks.
+The CLI and MCP server load it from the mode-0600 ttl config automatically.
 
 ## MCP server (recommended)
 
@@ -44,8 +37,7 @@ config:
   "mcpServers": {
     "ttl": {
       "command": "ttl",
-      "args": ["mcp"],
-      "env": { "TTL_SERVER_URL": "http://localhost:8093" }
+      "args": ["mcp"]
     }
   }
 }
@@ -62,11 +54,16 @@ The CLI's MCP transport auto-injects the API key from `~/.config/ttl/config.json
 | `show_task` | Full task by id |
 | `search_tasks` | Free-text + tag search |
 | `complete_task` | Mark done (spawns next occurrence if recurring) |
-| `delete_task` | Delete by id |
+| `delete_task`, `restore_task`, `purge_task` | Trash, recover, or permanently remove tasks |
+| `update_task`, `reorder_task` | Edit and organize tasks and subtasks |
+| `add_subtask`, `list_subtasks` | Manage task hierarchy |
 | `start_timer` | Begin timer on a task |
 | `stop_timer` | End current timer |
 | `active_timer` | What's running now |
 | `worklog_today` | Today's tracked time per task |
+| `projects_*`, `tags_*` | Manage projects and tags |
+| `reminder_*` | Create, snooze, acknowledge, and remove reminders |
+| `keys_*`, `members_*` | Administer scoped credentials and workspace members |
 
 ### Date / time conventions
 
@@ -79,13 +76,12 @@ The CLI's MCP transport auto-injects the API key from `~/.config/ttl/config.json
 ```bash
 # Add
 ttl add "Write docs" --project docs --tag p1 --due tomorrow
-ttl add "Subtask" --parent <task-id>
+ttl subtask add <task-id> "Draft examples"
 
 # List (always pipe to jq if you'll process the output)
-ttl list -o ndjson | jq -r 'select(.priority >= 2) | .id'
-ttl list --project docs --tag p1 -o ndjson
-ttl list --overdue -o ndjson
-ttl list --since 2026-06-01 -o ndjson
+ttl list --format ndjson | jq -r 'select(.priority >= 2) | .id'
+ttl list --project docs --format ndjson
+ttl list --overdue --format ndjson
 
 # Show / edit / complete
 ttl show <id-or-prefix>
@@ -93,17 +89,16 @@ ttl edit <id> --title "..." --priority 2 --due 2026-07-01
 ttl done <id>            # next occurrence shown automatically if recurring
 
 # Time tracking
-ttl timer start <task-id>
-ttl timer stop
-ttl timer                # show active
+ttl start <task-id>
+ttl stop
 ttl log                  # today's worklog
-ttl pomodoro --focus 25 --break 5
+ttl pomodoro <task-id> --minutes 25
 
 # Projects / tags / recurring / reminders
 ttl project add "Work"
 ttl tag add urgent
-ttl add "Standup" --rrule "FREQ=WEEKLY;BYDAY=MO"
-ttl reminder "call mom" --at "2026-06-28T09:00"
+ttl add "Standup" --repeat "rrule:FREQ=WEEKLY;BYDAY=MO"
+ttl reminder add <task-id> --at +2h
 
 # Integrations (sync + webhooks)
 ttl integrations add github --label "my-work"
@@ -114,34 +109,23 @@ ttl integrations list
 **Task IDs are UUIDs.** Use the first 8+ chars to disambiguate; the CLI
 accepts short prefixes that match exactly one task.
 
-## REST API (when MCP isn't available)
+## CLI fallback (when MCP isn't available)
 
-Base URL: `http://localhost:8093/api/v1`. All endpoints under
-`/api/v1/...` (except `/api/v1/auth/{signup,login}` and
-`/api/v1/webhooks/<provider>`) require auth via either:
-
-- `Cookie: ttl_session=...` (web UI / browser flow)
-- `X-API-Key: ttk_...` (programmatic, preferred)
-
-Quick reference:
+The CLI uses the same authenticated API and provides structured JSON or NDJSON
+without exposing credentials:
 
 ```bash
-KEY=$(jq -r .api_key ~/.config/ttl/config.json)
-H="X-API-Key: $KEY"
-
 # Today
-curl -s -H "$H" "http://localhost:8093/api/v1/tasks?status=open&limit=50"
+ttl list --format json
 
 # Add
-curl -s -X POST -H "$H" -H "Content-Type: application/json" \
-  -d '{"title":"Write README","priority":2,"tags":["docs"]}' \
-  http://localhost:8093/api/v1/tasks
+ttl add "Write README" --priority 2 --tag docs
 
 # Complete
-curl -s -X POST -H "$H" http://localhost:8093/api/v1/tasks/<id>/complete
+ttl done <id>
 
 # Worklog
-curl -s -H "$H" http://localhost:8093/api/v1/worklog/today
+ttl log
 ```
 
 ## Multi-tenancy
@@ -178,9 +162,8 @@ RRULE format reference: <https://datatracker.ietf.org/doc/html/rfc5545>.
 
 1. **The CLI's `-o` flag is `--format`.** `ttl list -o ndjson` selects the
    NDJSON streaming format. Always use `-o ndjson | jq` for parsing.
-2. **macOS redacts `ttk_…` strings in terminal output** (system-level
-   log redaction, not a ttl bug). To see the real key:
-   `xxd ~/.config/ttl/config.json` or open the file in an editor.
+2. **Treat `~/.config/ttl/config.json` as a secret.** Do not display or copy
+   its API key into chat, logs, prompts, or shell history.
 3. **`/api/v1/api-keys` returns the plaintext key only on creation.**
    It is not retrievable later — re-issue if lost (which invalidates the
    old one).
