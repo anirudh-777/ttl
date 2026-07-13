@@ -1,6 +1,6 @@
 ---
 name: ttl
-description: Terminal-first multi-tenant task tracker with an MCP server, REST API, and CLI. Use when the user wants to capture tasks, manage todos, track time, run a Pomodoro, sync GitHub or Linear issues, send reminders, or query their worklog — including "add a task", "what's on my list", "start a timer", "show today's worklog", "mark done", "log time", "sync GitHub issues", or any task-tracking request. Prefer the MCP server (`ttl mcp`) over the CLI or REST API because it is the agent-native surface.
+description: Agents-first multi-tenant task tracker with a built-in MCP interface, REST API, and CLI. Use when the user wants to capture tasks, manage todos, track time, run a Pomodoro, sync GitHub or Linear issues, send reminders, or query their worklog — including "add a task", "what's on my list", "start a timer", "show today's worklog", "mark done", "log time", "sync GitHub issues", or any task-tracking request. Prefer the MCP interface (`ttl mcp`) over the CLI or REST API because it is the agent-native surface.
 allowed-tools: Bash(ttl:*), Bash(agent-browser:*)
 ---
 
@@ -25,7 +25,7 @@ ttl config show
 ```
 
 Never print or read the plaintext API key unless the user explicitly asks.
-The CLI and MCP server load it from the mode-0600 ttl config automatically.
+The CLI and MCP interface load it from the mode-0600 ttl config automatically.
 
 ## MCP server (recommended)
 

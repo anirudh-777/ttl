@@ -4,7 +4,8 @@
 self-hostable task tracker where humans work from the terminal or web and
 agents manage the same tasks through structured MCP tools. It ships as one
 static ~13 MB binary with SQLite, a CLI, TUI, web UI, REST API, WebSocket
-updates, and an MCP server.
+updates, and a built-in MCP interface. There is no separate agent service to
+deploy: your coding agent launches `ttl mcp` locally when it needs a tool.
 
 **Project site: <https://anirudh-777.github.io/ttl/>**
 
@@ -42,7 +43,7 @@ and agents as first-class users of the same task system:
 |---|---|---|
 | 1. MVP | done | CLI, REST, TUI (today/inbox), web UI, multi-tenant auth, cross-platform builds |
 | 2. Focus | done | Start/stop timer, Pomodoro, daily work-log, active-timer banner |
-| 3. AI + live | done | Recurring tasks (RRULE), reminders, WebSocket live updates, MCP server |
+| 3. AI + live | done | Recurring tasks (RRULE), reminders, WebSocket live updates, built-in MCP tools |
 | 4. Integrations | done | GitHub + Linear providers, webhook receiver with HMAC verification, two-way sync |
 | v1 readiness | done | Recoverable trash, smart views, complete agent CRUD, recurrence/reminders, scoped keys, team invites |
 
@@ -104,7 +105,7 @@ Open <http://localhost:8093/login> for the web UI.
 | TUI | `ttl view <inbox|today|upcoming|overdue|next|done|trash>` — vim-style keys |
 | Web | <http://localhost:8093/today> — smart views, task editing, projects, team and keys |
 | API | `curl -H "X-API-Key: ttk_..." http://localhost:8093/api/v1/tasks` |
-| MCP | `ttl mcp` — task CRUD, subtasks, reminders, timers, and smart views for agents |
+| MCP interface | `ttl mcp` — structured task CRUD, subtasks, reminders, timers, and smart views for agents |
 | Agent setup | `ttl agents install` — detect coding agents, install the skill, register MCP |
 | WebSocket | `ws://localhost:8093/api/v1/ws` — live events |
 

@@ -25,7 +25,7 @@ var agentsCmd = &cobra.Command{
 
 var agentsInstallCmd = &cobra.Command{
 	Use:   "install",
-	Short: "Detect coding agents and install the ttl skill and MCP server",
+	Short: "Detect coding agents and install the ttl skill and MCP interface",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		targets, opts, err := agentCommandContext(cmd, false)
