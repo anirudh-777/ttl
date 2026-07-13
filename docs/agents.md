@@ -1,5 +1,9 @@
 # Installing ttl for coding agents
 
+ttl is built for agents to participate in your workflow, not merely read about
+it. Your coding agents get structured task tools while you keep the CLI, TUI,
+and web interfaces. Everyone works from the same source of truth.
+
 `ttl agents` installs two complementary pieces:
 
 - the embedded ttl skill, which teaches an agent when and how to manage work;

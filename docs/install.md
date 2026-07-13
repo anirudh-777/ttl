@@ -31,7 +31,7 @@ What this does:
 
 ```bash
 # Pin a specific version
-curl -sSL .../install.sh | bash -s -- --version v1.0.0
+curl -sSL .../install.sh | bash -s -- --version v1.0.1
 
 # User-local install (no sudo)
 curl -sSL .../install.sh | bash -s -- --to ~/.local/bin
@@ -51,12 +51,12 @@ curl -sSL .../install.sh | bash -s -- --print-checksum
 
 ```bash
 ttl version
-# ttl v1.0.0 (commit ..., built ...)
+# ttl v1.0.1 (commit ..., built ...)
 
 # and the server's built-in version endpoint
 ttl serve &
 curl -s http://localhost:8093/version
-# {"version":"v1.0.0","built":"...","go":"go1.25.0"}
+# {"version":"v1.0.1","built":"...","go":"go1.25.0"}
 ```
 
 ## 2. `go install`
@@ -66,7 +66,7 @@ If you have Go 1.25+:
 ```bash
 go install github.com/anirudh-777/ttl/cmd/ttl@latest
 # or pin:
-go install github.com/anirudh-777/ttl/cmd/ttl@v1.0.0
+go install github.com/anirudh-777/ttl/cmd/ttl@v1.0.1
 ```
 
 The binary lands in `$GOBIN` (default `~/go/bin`). Make sure that's

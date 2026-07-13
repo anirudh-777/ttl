@@ -249,7 +249,8 @@ main { display: block; }
   font-size: .85rem;
   display: flex; align-items: center; justify-content: space-between; gap: 1rem;
 }
-.install pre code { white-space: pre; }
+.install pre[hidden] { display: none; }
+.install pre code { white-space: pre; min-width: 0; overflow-x: auto; }
 .copy-btn {
   background: transparent; border: 1px solid var(--border);
   color: var(--muted);

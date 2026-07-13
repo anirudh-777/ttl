@@ -208,12 +208,12 @@
 <header>
   <div class="brand">
     <h1>ttl</h1>
-    <span class="ver">v0.4.0</span>
+    <span class="ver">v1.0.1</span>
   </div>
-  <p class="tag">Terminal Task List &mdash; a tiny, AI-friendly task tracker.</p>
+  <p class="tag">The lightweight, agents-first task tracker.</p>
   <p class="lede">
-    A single static binary (~13&nbsp;MB) with CLI, TUI, web UI, REST API,
-    and MCP server. Multi-tenant, SQLite-backed, no CGO.
+    One task system for you and your coding agents. Work through the CLI, TUI,
+    or web while agents use structured MCP tools on the same tasks.
   </p>
 </header>
 
@@ -235,15 +235,14 @@
 
 <h2 id="install">Install</h2>
 
-<p>Download a release binary from your project's <code>dist/</code>
-folder, or build from source:</p>
+<p>Install the latest checksummed release on macOS, Linux, or WSL:</p>
 
-<pre><code>go install ./cmd/ttl@latest
-# or
-git clone ttl &amp;&amp; cd ttl &amp;&amp; make build</code></pre>
+<pre><code>curl -sSL https://raw.githubusercontent.com/anirudh-777/ttl/main/scripts/install.sh | bash
+ttl version</code></pre>
 
-<p>Place <code>ttl</code> somewhere on your <code>$PATH</code>.
-That's it &mdash; no daemon, no service to register.</p>
+<p>The installer chooses <code>/usr/local/bin</code> when writable and otherwise
+uses <code>~/.local/bin</code>. With Go 1.25+, you can instead run
+<code>go install github.com/anirudh-777/ttl/cmd/ttl@latest</code>.</p>
 
 <h2 id="start">Quick start</h2>
 

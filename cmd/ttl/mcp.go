@@ -15,7 +15,7 @@ var mcpCmd = &cobra.Command{
 	Use:   "mcp",
 	Short: "Run the Model Context Protocol server on stdio",
 	Long: `Run ttl as a Model Context Protocol server speaking JSON-RPC 2.0
-over stdin/stdout. Use this to expose ttl tools to AI agents like
+over stdin/stdout. Use this to give coding agents structured ttl tools like
 Claude, Cursor, or Cline.
 
 Example MCP config (Claude Desktop):

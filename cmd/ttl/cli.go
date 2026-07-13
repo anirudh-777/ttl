@@ -30,7 +30,7 @@ var (
 // rootCmd is the entrypoint used when no subcommand is given.
 var rootCmd = &cobra.Command{
 	Use:           "ttl",
-	Short:         "ttl — terminal task tracker (CLI, TUI, server)",
+	Short:         "ttl — the agents-first task tracker",
 	SilenceUsage:  true,
 	SilenceErrors: true,
 }

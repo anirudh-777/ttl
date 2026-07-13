@@ -3,8 +3,8 @@ layout: default
 title: ttl
 ---
 <header class="hero" id="top">
-  <h1>The task tracker that<br>stays out of <span class="accent">your way</span>.</h1>
-  <p class="lede">A single static Go binary (~13&nbsp;MB) that ships a CLI, TUI, web UI, REST API, WebSocket live updates, and an MCP server for AI agents. SQLite + WAL, no CGO, row-level multi-tenancy.</p>
+  <h1>One task system for<br><span class="accent">you and your agents</span>.</h1>
+  <p class="lede">A lightweight, agents-first task tracker. Work from the terminal or web while your coding agents manage the same tasks through structured MCP tools. One self-hostable ~13&nbsp;MB Go binary, backed by SQLite.</p>
   <div class="hero-ctas">
     <a class="btn btn-primary" href="#install">Install</a>
     <a class="btn btn-secondary" href="#features">What it does</a>
@@ -17,7 +17,7 @@ title: ttl
       <button class="install-tab" data-target="brew" role="tab" aria-selected="false">Homebrew</button>
       <button class="install-tab" data-target="build" role="tab" aria-selected="false">From source</button>
     </div>
-    <pre id="cmd-mac"><code>curl -L https://github.com/anirudh-777/ttl/releases/latest/download/ttl-$(uname -s | tr A-Z a-z)-$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/') -o ttl && chmod +x ttl && sudo mv ttl /usr/local/bin/</code><button class="copy-btn" data-copy="cmd-mac">copy</button></pre>
+    <pre id="cmd-mac"><code>curl -sSL https://raw.githubusercontent.com/anirudh-777/ttl/main/scripts/install.sh | bash</code><button class="copy-btn" data-copy="cmd-mac">copy</button></pre>
     <pre id="cmd-brew" hidden><code># coming soon — brew tap anirudh-777/ttl</code><button class="copy-btn" data-copy="cmd-brew">copy</button></pre>
     <pre id="cmd-build" hidden><code>git clone https://github.com/anirudh-777/ttl &amp;&amp; cd ttl &amp;&amp; make build</code><button class="copy-btn" data-copy="cmd-build">copy</button></pre>
   </div>
@@ -25,8 +25,8 @@ title: ttl
 
 <section id="surfaces">
   <div class="section-inner">
-    <h2 class="section-title">Six surfaces, one binary</h2>
-    <p class="section-sub">Use whatever fits the moment: terminal at your desk, browser on your phone, an MCP tool call from your agent.</p>
+    <h2 class="section-title">Humans and agents, one source of truth</h2>
+    <p class="section-sub">Capture work in the terminal, review it in a browser, and let coding agents handle task CRUD through MCP. Every surface updates the same tasks.</p>
     <div class="surfaces">
       <div class="surface"><span class="name">CLI</span><span class="desc">Fast capture, scripts, JSON / NDJSON for piping into <code>jq</code>.</span></div>
       <div class="surface"><span class="name">TUI</span><span class="desc">Bubble Tea today/inbox views. vim-style keys, runs over SSH.</span></div>
@@ -40,8 +40,8 @@ title: ttl
 
 <section id="features" style="background: var(--bg-alt); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);">
   <div class="section-inner">
-    <h2 class="section-title">Built for speed and keyboard</h2>
-    <p class="section-sub">No Electron. No Angular. No Docker required. Just a single static binary you can drop on a server and forget about.</p>
+    <h2 class="section-title">Agents-first without the infrastructure tax</h2>
+    <p class="section-sub">No Electron, Node runtime, or external database. Drop one static binary on a server and give people and agents a shared place to manage work.</p>
     <div class="features">
       <div class="feature">
         <div class="icon">M</div>
@@ -65,8 +65,8 @@ title: ttl
       </div>
       <div class="feature">
         <div class="icon">A</div>
-        <h3>AI-native</h3>
-        <p>Stable REST API, NDJSON streaming, MCP server. Programmable from any language, native to every major agent.</p>
+        <h3>Agent-ready in one command</h3>
+        <p><code>ttl agents install</code> installs the skill and registers structured MCP tools for supported coding agents without copying your API key into their configs.</p>
       </div>
       <div class="feature">
         <div class="icon">$</div>
