@@ -314,6 +314,79 @@ type DailyTaskTotal struct {
 	Count     int    `json:"count"`
 }
 
+// ProductivityDay is a compact daily trend derived from existing task and
+// time-entry rows. No analytics events or summary tables are persisted.
+type ProductivityDay struct {
+	Day       string `json:"day"`
+	Completed int    `json:"completed"`
+	FocusMs   int64  `json:"focus_ms"`
+	Sessions  int    `json:"sessions"`
+}
+
+// ProductivityTrend returns one bucket per local calendar day, oldest first.
+func (s *Store) ProductivityTrend(ctx context.Context, tc *tenant.Context, days int, loc *time.Location) ([]ProductivityDay, error) {
+	if days < 1 || days > 30 {
+		days = 14
+	}
+	if loc == nil {
+		loc = time.UTC
+	}
+	now := time.Now().In(loc)
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
+	from := today.AddDate(0, 0, -(days - 1))
+	to := today.AddDate(0, 0, 1)
+	trend := make([]ProductivityDay, days)
+	byDay := make(map[string]*ProductivityDay, days)
+	for i := range trend {
+		trend[i].Day = from.AddDate(0, 0, i).Format("2006-01-02")
+		byDay[trend[i].Day] = &trend[i]
+	}
+
+	taskRows, err := s.DB.QueryContext(ctx, `SELECT completed_at FROM tasks
+		WHERE tenant_id = ? AND created_by = ? AND status = 'done'
+		  AND deleted_at IS NULL AND completed_at >= ? AND completed_at < ?`,
+		tc.TenantID, tc.UserID, from.UnixMilli(), to.UnixMilli())
+	if err != nil {
+		return nil, err
+	}
+	for taskRows.Next() {
+		var completedAt int64
+		if err := taskRows.Scan(&completedAt); err != nil {
+			taskRows.Close()
+			return nil, err
+		}
+		if bucket := byDay[time.UnixMilli(completedAt).In(loc).Format("2006-01-02")]; bucket != nil {
+			bucket.Completed++
+		}
+	}
+	if err := taskRows.Close(); err != nil {
+		return nil, err
+	}
+
+	timeRows, err := s.DB.QueryContext(ctx, `SELECT started_at, duration_ms FROM time_entries
+		WHERE tenant_id = ? AND user_id = ? AND ended_at IS NOT NULL
+		  AND started_at >= ? AND started_at < ?`,
+		tc.TenantID, tc.UserID, from.UnixMilli(), to.UnixMilli())
+	if err != nil {
+		return nil, err
+	}
+	defer timeRows.Close()
+	for timeRows.Next() {
+		var startedAt, durationMs int64
+		if err := timeRows.Scan(&startedAt, &durationMs); err != nil {
+			return nil, err
+		}
+		if bucket := byDay[time.UnixMilli(startedAt).In(loc).Format("2006-01-02")]; bucket != nil {
+			bucket.FocusMs += durationMs
+			bucket.Sessions++
+		}
+	}
+	if err := timeRows.Err(); err != nil {
+		return nil, err
+	}
+	return trend, nil
+}
+
 // -------------------------- helpers --------------------------
 
 const timeEntrySelect = `

@@ -112,6 +112,13 @@
     } catch { return { summary: { per_task: [], total_ms: 0 }, active: null }; }
   }
 
+  async function fetchProductivityTrend(days) {
+    try {
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      return await api('GET', '/api/v1/analytics/productivity?days=' + days + '&tz=' + encodeURIComponent(tz));
+    } catch { return { days: [] }; }
+  }
+
   function fmtDur(ms) {
     const s = Math.floor(ms / 1000);
     const m = Math.floor(s / 60);
@@ -351,20 +358,23 @@
       title = 'Today';
       params = { view: 'today', limit: '500' };
       try {
-        const [data, doneData, wl] = await Promise.all([
+        const [data, doneData, wl, trend] = await Promise.all([
           api('GET', '/api/v1/tasks?view=today&limit=500'),
           api('GET', '/api/v1/tasks?view=done&limit=500'),
           fetchWorklog(),
+          fetchProductivityTrend(14),
         ]);
         const filtered = data.tasks || [];
         const completedToday = (doneData.tasks || []).filter((t) => isToday(t.completed_at));
         main.innerHTML = composerHTML(title) +
           '<section class="analytics" id="analytics"></section>' +
+          '<section class="trend-panel" id="trend"></section>' +
           '<section class="worklog" id="worklog"></section>' +
           '<section><h3>Due today</h3><div id="taskhost"></div></section>' +
           '<section class="completed-today"><h3>Completed today</h3><div id="completed-host"></div></section>';
         composer(main, params);
         $('#analytics', main).innerHTML = renderAnalyticsHTML(filtered, completedToday, wl);
+        $('#trend', main).innerHTML = renderTrendHTML(trend);
         const wlh = $('#worklog', main);
         wlh.innerHTML = renderWorklogHTML(wl, filtered);
         wireWorklog(wlh);
@@ -425,6 +435,24 @@
       ['Sessions', sessions],
     ];
     return cards.map((card) => '<div class="metric"><span>' + card[0] + '</span><b>' + card[1] + '</b></div>').join('');
+  }
+
+  function renderTrendHTML(trend) {
+    const days = (trend && trend.days) || [];
+    if (days.length === 0) return '<div class="empty">Historical trends are not available yet.</div>';
+    const maxCompleted = Math.max(1, ...days.map((d) => d.completed || 0));
+    const maxFocus = Math.max(1, ...days.map((d) => d.focus_ms || 0));
+    return '<div class="trend-heading"><h3>14-day trend</h3><div class="trend-legend"><span class="tasks-key">tasks</span><span class="focus-key">focus</span></div></div>' +
+      '<div class="trend-chart">' + days.map((d) => {
+        const taskHeight = d.completed ? Math.max(4, Math.round((d.completed / maxCompleted) * 100)) : 0;
+        const focusHeight = d.focus_ms ? Math.max(4, Math.round((d.focus_ms / maxFocus) * 100)) : 0;
+        const label = d.day.slice(5);
+        const detail = d.completed + ' completed, ' + fmtDur(d.focus_ms || 0) + ' focus, ' + d.sessions + ' sessions';
+        return '<div class="trend-day" title="' + escapeHTML(d.day + ': ' + detail) + '" aria-label="' + escapeHTML(d.day + ': ' + detail) + '">' +
+          '<div class="trend-bars"><span class="trend-bar tasks" style="height:' + taskHeight + '%"></span>' +
+          '<span class="trend-bar focus" style="height:' + focusHeight + '%"></span></div>' +
+          '<small>' + label + '</small></div>';
+      }).join('') + '</div>';
   }
 
   async function renderMain(main, title, params) {

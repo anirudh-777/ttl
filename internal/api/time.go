@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/anirudh-777/ttl/internal/store"
@@ -137,6 +138,28 @@ func (s *Server) handleWorklogToday(w http.ResponseWriter, r *http.Request) {
 		"summary": summary,
 		"active":  active,
 	})
+}
+
+func (s *Server) handleProductivityTrend(w http.ResponseWriter, r *http.Request) {
+	tc := tenant.MustFrom(r.Context())
+	days := 14
+	if value := r.URL.Query().Get("days"); value != "" {
+		if parsed, err := strconv.Atoi(value); err == nil && parsed >= 1 && parsed <= 30 {
+			days = parsed
+		}
+	}
+	loc := time.Local
+	if tz := r.URL.Query().Get("tz"); tz != "" {
+		if loaded, err := time.LoadLocation(tz); err == nil {
+			loc = loaded
+		}
+	}
+	trend, err := s.Store.ProductivityTrend(r.Context(), tc, days, loc)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal", err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"days": trend})
 }
 
 func todayStart(loc *time.Location) time.Time {

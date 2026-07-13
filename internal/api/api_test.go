@@ -111,3 +111,22 @@ func TestTaskAPIRequiresAuthentication(t *testing.T) {
 		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
 	}
 }
+
+func TestProductivityTrendAPIIsBounded(t *testing.T) {
+	f := newAPIFixture(t)
+	response := f.request(t, http.MethodGet, "/api/v1/analytics/productivity?days=7&tz=UTC", nil)
+	if response.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	var body struct {
+		Days []struct {
+			Day string `json:"day"`
+		} `json:"days"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if len(body.Days) != 7 || body.Days[0].Day == "" {
+		t.Fatalf("days=%+v", body.Days)
+	}
+}

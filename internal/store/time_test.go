@@ -125,6 +125,41 @@ func TestDailySummary(t *testing.T) {
 	}
 }
 
+func TestProductivityTrendUsesExistingTaskAndTimerData(t *testing.T) {
+	d := openTestDB(t)
+	st := store.New(d)
+	ctx := context.Background()
+	u := signup(t, d, "trend@test.local", "Trend")
+	tc := &tenant.Context{TenantID: u.TenantID, UserID: u.ID, Role: u.Role}
+
+	task, err := st.CreateTask(ctx, tc, mkTask("Ship trend"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.CompleteTask(ctx, tc, task.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.StartTimeEntry(ctx, tc, &task.ID, "pomodoro", ""); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(10 * time.Millisecond)
+	if _, err := st.StopTimeEntry(ctx, tc, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	trend, err := st.ProductivityTrend(ctx, tc, 7, time.Local)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(trend) != 7 {
+		t.Fatalf("days=%d, want 7", len(trend))
+	}
+	today := trend[len(trend)-1]
+	if today.Completed != 1 || today.Sessions != 1 || today.FocusMs <= 0 {
+		t.Fatalf("today=%+v", today)
+	}
+}
+
 func TestActiveTimerLookup(t *testing.T) {
 	d := openTestDB(t)
 	st := store.New(d)

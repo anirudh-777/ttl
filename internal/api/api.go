@@ -123,6 +123,7 @@ func New(d *sql.DB, st *store.Store, hub *events.Hub) http.Handler {
 		r.Get("/timer/active", s.handleTimerActive)
 		r.Get("/timer/entries", s.handleTimerList)
 		r.Get("/worklog/today", s.handleWorklogToday)
+		r.Get("/analytics/productivity", s.handleProductivityTrend)
 
 		// Reminders.
 		r.Post("/reminders", s.handleCreateReminder)
@@ -193,7 +194,7 @@ func requiredScope(r *http.Request) string {
 			return "tasks:read"
 		}
 		return "tasks:write"
-	case strings.Contains(p, "/timer"), strings.Contains(p, "/worklog"), strings.Contains(p, "/reminders"), strings.Contains(p, "/notifications"):
+	case strings.Contains(p, "/timer"), strings.Contains(p, "/worklog"), strings.Contains(p, "/analytics"), strings.Contains(p, "/reminders"), strings.Contains(p, "/notifications"):
 		if read {
 			return "productivity:read"
 		}

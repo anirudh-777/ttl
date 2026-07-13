@@ -129,6 +129,20 @@ label small { display: block; color: var(--muted); margin-top: .35rem; }
 .metric { background: #181818; border: 1px solid var(--line); border-radius: 6px; padding: .7rem .8rem; }
 .metric span { display: block; color: var(--muted); font-size: .85rem; }
 .metric b { display: block; margin-top: .15rem; font-size: 1.35rem; }
+.trend-panel { background: #181818; border: 1px solid var(--line); border-radius: 6px; padding: .7rem .8rem; margin: .8rem 0; }
+.trend-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.trend-heading h3 { margin: 0; }
+.trend-legend { display: flex; gap: .8rem; color: var(--muted); font-size: .8rem; }
+.trend-legend span::before { content: ''; display: inline-block; width: .65rem; height: .65rem; margin-right: .3rem; border-radius: 2px; }
+.trend-legend .tasks-key::before { background: var(--ok); }
+.trend-legend .focus-key::before { background: var(--accent); }
+.trend-chart { display: grid; grid-template-columns: repeat(14, minmax(28px, 1fr)); gap: .35rem; height: 150px; margin-top: .8rem; overflow-x: auto; }
+.trend-day { display: grid; grid-template-rows: 1fr auto; gap: .25rem; min-width: 28px; text-align: center; color: var(--muted); }
+.trend-bars { display: flex; align-items: flex-end; justify-content: center; gap: 3px; min-height: 0; border-bottom: 1px solid var(--line); }
+.trend-bar { display: block; width: min(9px, 40%); border-radius: 2px 2px 0 0; }
+.trend-bar.tasks { background: var(--ok); }
+.trend-bar.focus { background: var(--accent); }
+.trend-day small { font-size: .68rem; white-space: nowrap; }
 .completed-today { margin-top: 1.5rem; }
 
 #toast-host {
