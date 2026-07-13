@@ -16,10 +16,12 @@ ARG COMMIT=none
 ARG DATE=unknown
 RUN CGO_ENABLED=0 go build -trimpath \
     -ldflags="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.date=${DATE}" \
-    -o /out/ttl ./cmd/ttl
+    -o /out/ttl ./cmd/ttl && \
+    mkdir /out/data
 
 FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=build /out/ttl /usr/local/bin/ttl
+COPY --from=build --chown=nonroot:nonroot /out/data /data
 ENV TTL_DATA_DIR=/data
 EXPOSE 8093
 USER nonroot:nonroot
