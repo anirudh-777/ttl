@@ -24,13 +24,15 @@
   <main id="main"></main>
   <dialog id="task-dialog">
     <form id="task-edit-form">
-      <h3>Edit task</h3><input type="hidden" name="id">
+      <div class="dialog-heading"><h3>Edit task</h3><button type="button" class="dialog-close" data-act="cancel-edit" aria-label="Close task editor">&times;</button></div>
+      <input type="hidden" name="id">
       <label><span>Title</span><input name="title" required></label>
       <label><span>Notes</span><textarea name="notes" rows="5"></textarea></label>
       <label><span>Due</span><input name="due" type="datetime-local"></label>
       <label><span>Priority</span><select name="priority"><option value="0">None</option><option value="1">Low</option><option value="2">Medium</option><option value="3">High</option></select></label>
       <label><span>Tags (comma separated)</span><input name="tags"></label>
-      <label><span>Repeat (preset or RRULE)</span><input name="repeat" placeholder="daily, weekdays, weekly, or RRULE:FREQ=..."></label>
+      <label><span>Repeat</span><select name="repeat"><option value="">Does not repeat</option><option value="daily">Daily</option><option value="weekdays">Weekdays</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option><option value="yearly">Yearly</option><option value="custom">Custom schedule</option></select></label>
+      <label class="repeat-custom" hidden><span>Custom RRULE</span><input name="repeat_custom" placeholder="FREQ=WEEKLY;BYDAY=MO,WE"><small>Advanced: use an iCalendar RRULE, for example <code>FREQ=WEEKLY;BYDAY=MO,WE</code>.</small></label>
       <div class="dialog-actions"><button type="button" class="secondary" data-act="cancel-edit">Cancel</button><button type="submit">Save</button></div>
     </form>
     <hr>
@@ -38,7 +40,7 @@
     <ul id="subtask-list" class="tasklist"></ul>
     <form id="reminder-form" class="composer"><input name="at" type="datetime-local" required><button>Add reminder</button></form>
   </dialog>
-  <script src="/app.js?v=20260713-v1"></script>
+  <script src="/app.js?v=20260713-v2"></script>
   <script>
     // Defensive boot: app.js loads above and (on success) defines
     // window.ttl.{boot,bootAuth}. If anything goes wrong, surface it

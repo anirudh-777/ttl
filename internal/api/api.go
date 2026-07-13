@@ -547,6 +547,10 @@ func (req taskCreateReq) toModel() *model.Task {
 	if req.DueAt != nil {
 		v := time.UnixMilli(*req.DueAt)
 		t.DueAt = &v
+	} else {
+		now := time.Now()
+		v := time.Date(now.Year(), now.Month(), now.Day(), 12, 0, 0, 0, now.Location())
+		t.DueAt = &v
 	}
 	return t
 }

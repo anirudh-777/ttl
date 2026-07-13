@@ -44,6 +44,16 @@
     return d.toISOString().slice(5, 10);
   }
 
+  function localDateValue(d) {
+    const date = d || new Date();
+    const offset = date.getTimezoneOffset() * 60000;
+    return new Date(date.getTime() - offset).toISOString().slice(0, 10);
+  }
+
+  function isToday(value) {
+    return value && localDateValue(new Date(value)) === localDateValue();
+  }
+
   function priLabel(p) {
     if (p === 3) return '<span class="pri-high">!!</span>';
     if (p === 2) return '<span class="pri-med">!</span>';
@@ -105,7 +115,7 @@
     return s + 's';
   }
 
-  function renderWorklogHTML(w) {
+  function renderWorklogHTML(w, openTasks) {
     const active = w.active;
     const sum = w.summary || {};
     let activeHTML = '';
@@ -130,7 +140,17 @@
       perTaskHTML = '<div class="muted">No completed entries today.</div>';
     }
     const total = '<div class="muted">Total tracked: <b>' + fmtDur(sum.total_ms || 0) + '</b></div>';
-    return activeHTML + total + perTaskHTML;
+    let focusHTML = '';
+    if (!active) {
+      focusHTML = '<form class="focus-controls" id="pomodoro-form">' +
+        '<b>Start a focus session</b>' +
+        '<select name="task_id" aria-label="Task"><option value="">General focus</option>' +
+        (openTasks || []).map((t) => '<option value="' + t.id + '">' + escapeHTML(t.title) + '</option>').join('') +
+        '</select>' +
+        '<select name="minutes" aria-label="Duration"><option value="25">25 min</option><option value="50">50 min</option></select>' +
+        '<button type="submit">Start Pomodoro</button></form>';
+    }
+    return activeHTML + focusHTML + total + perTaskHTML;
   }
 
   function wireWorklog(root) {
@@ -142,6 +162,18 @@
           await api('POST', '/api/v1/timer/stop', {});
           await boot();
         } catch (e) { alert(e.message); }
+      });
+    }
+    const pomodoro = root.querySelector('#pomodoro-form');
+    if (pomodoro) {
+      pomodoro.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const taskID = e.target.elements.task_id.value;
+        const minutes = Number(e.target.elements.minutes.value);
+        try {
+          await api('POST', '/api/v1/timer/start', { task_id: taskID, kind: 'pomodoro', minutes });
+          await boot();
+        } catch (err) { alert(err.message); }
       });
     }
     // Tick the elapsed counter every second.
@@ -200,7 +232,10 @@
       form.elements.notes.value = t.notes || '';
       form.elements.priority.value = String(t.priority || 0);
       form.elements.tags.value = (t.tags || []).join(',');
-      form.elements.repeat.value = t.recurrence_rrule || '';
+      const repeat = recurrenceFormValue(t.recurrence_rrule || '');
+      form.elements.repeat.value = repeat.preset;
+      form.elements.repeat_custom.value = repeat.custom;
+      updateRepeatFields(form);
       form.elements.due.value = t.due_at ? new Date(t.due_at).toISOString().slice(0, 16) : '';
       $('#subtask-list').innerHTML = (t.subtasks || []).map(renderTask).join('');
       wireList($('#subtask-list'));
@@ -211,7 +246,8 @@
   function wireTaskEditor() {
     const dialog = $('#task-dialog');
     const form = $('#task-edit-form');
-    $('[data-act="cancel-edit"]', dialog).addEventListener('click', () => dialog.close());
+    $$('[data-act="cancel-edit"]', dialog).forEach((b) => b.addEventListener('click', () => dialog.close()));
+    form.elements.repeat.addEventListener('change', () => updateRepeatFields(form));
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       const due = form.elements.due.value;
@@ -219,7 +255,7 @@
         title: form.elements.title.value.trim(), notes: form.elements.notes.value,
         priority: Number(form.elements.priority.value), due_at: due ? new Date(due).getTime() : null,
         tags: form.elements.tags.value.split(',').map((s) => s.trim()).filter(Boolean),
-        recurrence_rrule: form.elements.repeat.value || null,
+        recurrence_rrule: recurrenceValue(form),
       };
       try { await api('PATCH', '/api/v1/tasks/' + form.elements.id.value, body); dialog.close(); await boot(); }
       catch (err) { alert(err.message); }
@@ -242,6 +278,28 @@
     });
   }
 
+  function recurrenceFormValue(rule) {
+    const presets = {
+      'FREQ=DAILY': 'daily',
+      'FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR': 'weekdays',
+      'FREQ=WEEKLY': 'weekly',
+      'FREQ=MONTHLY': 'monthly',
+      'FREQ=YEARLY': 'yearly',
+    };
+    return presets[rule] ? { preset: presets[rule], custom: '' } :
+      (rule ? { preset: 'custom', custom: rule } : { preset: '', custom: '' });
+  }
+
+  function updateRepeatFields(form) {
+    $('.repeat-custom', form).hidden = form.elements.repeat.value !== 'custom';
+  }
+
+  function recurrenceValue(form) {
+    const preset = form.elements.repeat.value;
+    if (preset === 'custom') return form.elements.repeat_custom.value.trim() || null;
+    return preset || null;
+  }
+
   async function composer(root, params) {
     const form = $('form.composer', root);
     if (!form) return;
@@ -257,10 +315,6 @@
       if (dueRaw) {
         const t = new Date(dueRaw);
         if (!isNaN(t)) body.due_at = t.getTime();
-	  } else if (params && params.view === 'today') {
-		const today = new Date();
-		today.setHours(12, 0, 0, 0);
-		body.due_at = today.getTime();
       }
       try {
         await api('POST', '/api/v1/tasks', body);
@@ -291,15 +345,22 @@
       title = 'Today';
       params = { view: 'today', limit: '500' };
       try {
-        const data = await api('GET', '/api/v1/tasks?view=today&limit=500');
+        const [data, doneData, wl] = await Promise.all([
+          api('GET', '/api/v1/tasks?view=today&limit=500'),
+          api('GET', '/api/v1/tasks?view=done&limit=500'),
+          fetchWorklog(),
+        ]);
         const filtered = data.tasks || [];
-        const wl = await fetchWorklog();
+        const completedToday = (doneData.tasks || []).filter((t) => isToday(t.completed_at));
         main.innerHTML = composerHTML(title) +
+          '<section class="analytics" id="analytics"></section>' +
           '<section class="worklog" id="worklog"></section>' +
-          '<div id="taskhost"></div>';
+          '<section><h3>Due today</h3><div id="taskhost"></div></section>' +
+          '<section class="completed-today"><h3>Completed today</h3><div id="completed-host"></div></section>';
         composer(main, params);
+        $('#analytics', main).innerHTML = renderAnalyticsHTML(filtered, completedToday, wl);
         const wlh = $('#worklog', main);
-        wlh.innerHTML = renderWorklogHTML(wl);
+        wlh.innerHTML = renderWorklogHTML(wl, filtered);
         wireWorklog(wlh);
         const host = $('#taskhost', main);
         if (filtered.length === 0) {
@@ -307,6 +368,13 @@
         } else {
           host.innerHTML = '<ul class="tasklist">' + filtered.map(renderTask).join('') + '</ul>';
           wireList(host);
+        }
+        const completedHost = $('#completed-host', main);
+        if (completedToday.length === 0) {
+          completedHost.innerHTML = '<div class="empty">No tasks completed yet today.</div>';
+        } else {
+          completedHost.innerHTML = '<ul class="tasklist">' + completedToday.map(renderTask).join('') + '</ul>';
+          wireList(completedHost);
         }
         highlightNav('today');
         return;
@@ -341,6 +409,18 @@
     }
   }
 
+  function renderAnalyticsHTML(openTasks, completedTasks, worklog) {
+    const sum = worklog.summary || {};
+    const sessions = (sum.per_task || []).reduce((n, item) => n + Number(item.count || 0), 0);
+    const cards = [
+      ['Completed', completedTasks.length],
+      ['Remaining', openTasks.length],
+      ['Focus time', fmtDur(sum.total_ms || 0)],
+      ['Sessions', sessions],
+    ];
+    return cards.map((card) => '<div class="metric"><span>' + card[0] + '</span><b>' + card[1] + '</b></div>').join('');
+  }
+
   async function renderMain(main, title, params) {
 	const canCreate = params && params.view === 'inbox';
 	main.innerHTML = (canCreate ? composerHTML(title) : '<h2>' + escapeHTML(title) + '</h2>') + '<div id="taskhost"></div>';
@@ -354,7 +434,7 @@
       <form class="composer">
         <input name="title" placeholder="What needs doing?" autofocus>
         <input name="tags" placeholder="tag1,tag2" style="max-width:160px">
-        <input name="due" type="date" style="max-width:160px">
+        <input name="due" type="date" value="${localDateValue()}" style="max-width:160px" aria-label="Due date">
         <button type="submit">Add</button>
       </form>`;
   }

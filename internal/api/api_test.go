@@ -66,10 +66,14 @@ func TestTaskAPIUpdateTrashRestorePurge(t *testing.T) {
 		t.Fatalf("create status=%d body=%s", created.Code, created.Body.String())
 	}
 	var task struct {
-		ID string `json:"id"`
+		ID    string  `json:"id"`
+		DueAt *string `json:"due_at"`
 	}
 	if err := json.Unmarshal(created.Body.Bytes(), &task); err != nil {
 		t.Fatal(err)
+	}
+	if task.DueAt == nil {
+		t.Fatal("expected tasks created without a due date to default to today")
 	}
 
 	updated := f.request(t, http.MethodPatch, "/api/v1/tasks/"+task.ID, map[string]any{
