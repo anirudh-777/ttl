@@ -42,6 +42,8 @@ ttl show <id-or-prefix>             # full task by id or 8-char prefix
 
 # modify
 ttl done <id>                       # mark done (spawns next if recurring)
+ttl progress <id>                   # mark in progress
+ttl pause <id>                      # move back to open
 ttl edit <id> --title "..." --priority 3 --due none
 ttl move <id> --project Work --before <id>
 ttl rm <id>                         # move to recoverable trash
@@ -114,6 +116,7 @@ Keys:
 |---|---|
 | `j` / `k` / arrows | move selection |
 | `space` | toggle complete on the selected task |
+| `p` | toggle the selected task between open and in progress |
 | `n` | new task (type, Enter to save, Esc to cancel) |
 | `e` | edit selected task title |
 | `d` then `y` | delete selected |

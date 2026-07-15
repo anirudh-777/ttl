@@ -57,7 +57,7 @@ var viewCmd = &cobra.Command{
 	Use: "view <inbox|today|upcoming|overdue|next|done|trash>", Short: "Open a TUI task view", Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		view := tui.View(args[0])
-		valid := map[tui.View]bool{tui.ViewInbox: true, tui.ViewToday: true, tui.ViewUpcoming: true, tui.ViewOverdue: true, tui.ViewNext: true, tui.ViewDone: true, tui.ViewTrash: true}
+		valid := map[tui.View]bool{tui.ViewInbox: true, tui.ViewToday: true, tui.ViewUpcoming: true, tui.ViewOverdue: true, tui.ViewNext: true, tui.ViewProgress: true, tui.ViewDone: true, tui.ViewTrash: true}
 		if !valid[view] {
 			return fmt.Errorf("unknown view %q", args[0])
 		}

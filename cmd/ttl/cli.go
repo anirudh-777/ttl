@@ -114,8 +114,10 @@ var listCmd = &cobra.Command{
 			opts.Status = ""
 		} else if cmd.Flags().Changed("done") {
 			opts.Status = "done"
+		} else if cmd.Flags().Changed("in-progress") {
+			opts.Status = "in_progress"
 		} else {
-			opts.Status = "open"
+			opts.Status = "active"
 		}
 		opts.Overdue = overdueFlag(cmd)
 		opts.Search, _ = cmd.Flags().GetString("search")
@@ -136,6 +138,38 @@ var listCmd = &cobra.Command{
 			return err
 		}
 		return fmtcmd.PrintTasks(cmd.OutOrStdout(), fmtcmd.ResolveFormat(flagFormat), tasks)
+	},
+}
+
+var startTaskCmd = &cobra.Command{
+	Use: "progress <id>", Short: "Mark a task in progress", Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		c := mustClient()
+		id, err := resolveTaskID(c, args[0])
+		if err != nil {
+			return err
+		}
+		t, err := c.StartTask(context.Background(), id)
+		if err != nil {
+			return err
+		}
+		return fmtcmd.PrintTask(cmd.OutOrStdout(), fmtcmd.ResolveFormat(flagFormat), t)
+	},
+}
+
+var pauseTaskCmd = &cobra.Command{
+	Use: "pause <id>", Short: "Move an in-progress task back to open", Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		c := mustClient()
+		id, err := resolveTaskID(c, args[0])
+		if err != nil {
+			return err
+		}
+		t, err := c.PauseTask(context.Background(), id)
+		if err != nil {
+			return err
+		}
+		return fmtcmd.PrintTask(cmd.OutOrStdout(), fmtcmd.ResolveFormat(flagFormat), t)
 	},
 }
 
@@ -800,7 +834,7 @@ func init() {
 
 	// Subcommand wiring.
 	rootCmd.AddCommand(cliCmd)
-	cliCmd.AddCommand(addCmd, listCmd, showCmd, doneCmd, editCmd, moveCmd, rmCmd, restoreCmd, purgeCmd)
+	cliCmd.AddCommand(addCmd, listCmd, showCmd, doneCmd, startTaskCmd, pauseTaskCmd, editCmd, moveCmd, rmCmd, restoreCmd, purgeCmd)
 	cliCmd.AddCommand(projectCmd, tagCmd, loginCmd, signupCmd, logoutCmd, configCmd)
 	cliCmd.AddCommand(startCmd, stopCmd, pomodoroCmd, logCmd, timerCmd)
 	rootCmd.AddCommand(todayCmd, inboxCmd, viewCmd, serveCmd)
@@ -816,6 +850,7 @@ func init() {
 	// list flags.
 	listCmd.Flags().Bool("all", false, "include done tasks")
 	listCmd.Flags().Bool("done", false, "only done tasks")
+	listCmd.Flags().Bool("in-progress", false, "only in-progress tasks")
 	listCmd.Flags().Bool("overdue", false, "only overdue tasks")
 	listCmd.Flags().String("search", "", "search title/notes")
 	listCmd.Flags().StringP("project", "P", "", "filter by project name")

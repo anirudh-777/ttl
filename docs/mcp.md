@@ -59,10 +59,11 @@ Same shape: a stdio process that speaks JSON-RPC 2.0.
 | Tool | Purpose |
 |---|---|
 | `add_task` | Create a new task. Accepts `title`, `notes`, `priority`, `due_at`, `tags`, `project`. |
-| `list_tasks` | List tasks. Defaults to `status=open`. Filters: `project`, `search`, `overdue`, `limit`. |
+| `list_tasks` | List tasks. Defaults to all unfinished tasks. Filters: `status`, `project`, `search`, `overdue`, `limit`. |
 | `show_task` | Get a task by id or short prefix. |
 | `update_task` | Edit title, notes, priority, due date, project, tags, or recurrence. |
 | `complete_task` | Mark a task done. If the task is recurring, the next occurrence is created automatically. |
+| `start_task` / `pause_task` | Move a task between open and in progress. |
 | `delete_task` / `restore_task` / `purge_task` | Trash, recover, or permanently purge a task. |
 | `reorder_task` | Move or manually order a task or subtask. |
 | `add_subtask` / `list_subtasks` | Manage task hierarchy. |

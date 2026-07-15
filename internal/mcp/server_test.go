@@ -13,7 +13,7 @@ import (
 )
 
 func TestToolSchemasExposeCompleteTaskCRUD(t *testing.T) {
-	want := map[string]bool{"add_task": false, "list_tasks": false, "show_task": false, "update_task": false, "complete_task": false, "delete_task": false, "restore_task": false, "purge_task": false, "reorder_task": false}
+	want := map[string]bool{"add_task": false, "list_tasks": false, "show_task": false, "update_task": false, "start_task": false, "pause_task": false, "complete_task": false, "delete_task": false, "restore_task": false, "purge_task": false, "reorder_task": false}
 	for _, tool := range allTools() {
 		name, _ := tool["name"].(string)
 		if _, ok := want[name]; ok {

@@ -50,7 +50,7 @@ type Tag struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-// Task is the central unit of work. status: open | done.
+// Task is the central unit of work. status: open | in_progress | done.
 // priority: 0 none, 1 low, 2 medium, 3 high.
 type Task struct {
 	ID              string     `json:"id"`
@@ -66,6 +66,7 @@ type Task struct {
 	CreatedBy       string     `json:"created_by"`
 	CreatedAt       time.Time  `json:"created_at"`
 	UpdatedAt       time.Time  `json:"updated_at"`
+	StartedAt       *time.Time `json:"started_at,omitempty"`
 	CompletedAt     *time.Time `json:"completed_at,omitempty"`
 	DeletedAt       *time.Time `json:"deleted_at,omitempty"`
 	Position        int64      `json:"position"`

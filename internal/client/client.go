@@ -294,6 +294,18 @@ func (c *Client) CompleteTask(ctx context.Context, id string) (*model.Task, erro
 	return completed, err
 }
 
+func (c *Client) StartTask(ctx context.Context, id string) (*model.Task, error) {
+	var t model.Task
+	err := c.do(ctx, "POST", "/api/v1/tasks/"+id+"/start", nil, &t)
+	return &t, err
+}
+
+func (c *Client) PauseTask(ctx context.Context, id string) (*model.Task, error) {
+	var t model.Task
+	err := c.do(ctx, "POST", "/api/v1/tasks/"+id+"/pause", nil, &t)
+	return &t, err
+}
+
 // CompleteTaskWithRecur returns the completed task plus an optional
 // next occurrence if the task had a recurrence_rrule.
 func (c *Client) CompleteTaskWithRecur(ctx context.Context, id string) (*model.Task, *model.Task, error) {

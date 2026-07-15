@@ -82,6 +82,7 @@ ul.tasklist .pri-med  { color: var(--pri-med); }
 ul.tasklist .pri-low  { color: var(--pri-low); }
 ul.tasklist .due-overdue { color: var(--err); }
 ul.tasklist .due-today { color: var(--warn); }
+ul.tasklist .status-progress { color: var(--warn); font-weight: 600; }
 ul.tasklist .tag {
   display: inline-block; background: var(--line); padding: 1px 6px;
   border-radius: 8px; font-size: 0.8em;
@@ -126,7 +127,7 @@ label small { display: block; color: var(--muted); margin-top: .35rem; }
 .worklog table { width: 100%; border-collapse: collapse; }
 .worklog th { text-align: left; color: var(--muted); font-weight: normal; padding: 4px 0; }
 .worklog td { padding: 4px 8px 4px 0; }
-.focus-controls { display: grid; grid-template-columns: 1fr minmax(150px, 2fr) auto auto; gap: .5rem; align-items: center; margin-bottom: .75rem; }
+.focus-controls { display: grid; grid-template-columns: 1fr minmax(150px, 2fr) auto auto auto; gap: .5rem; align-items: center; margin-bottom: .75rem; }
 .analytics { display: grid; grid-template-columns: repeat(4, 1fr); gap: .6rem; margin: 1rem 0; }
 .metric { background: #181818; border: 1px solid var(--line); border-radius: 6px; padding: .7rem .8rem; }
 .metric span { display: block; color: var(--muted); font-size: .85rem; }

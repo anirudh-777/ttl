@@ -52,7 +52,7 @@ projects           id, tenant_id, name, color, archived_at, created_at
 tags               id, tenant_id, name, color, created_at
 tasks              id, tenant_id, project_id, parent_id, title, notes,
                    status, priority, due_at, recurrence_rrule,
-                   position, created_by, created_at, updated_at, completed_at, deleted_at
+                   position, created_by, created_at, updated_at, started_at, completed_at, deleted_at
 task_tags          task_id, tag_id, tenant_id
 time_entries       id, tenant_id, user_id, task_id, kind,
                    started_at, ended_at, duration_ms, planned_duration_ms, deadline_at, note

@@ -111,6 +111,8 @@ func New(d *sql.DB, st *store.Store, hub *events.Hub) http.Handler {
 		r.Post("/tasks", s.handleCreateTask)
 		r.Get("/tasks/{id}", s.handleGetTask)
 		r.Patch("/tasks/{id}", s.handleUpdateTask)
+		r.Post("/tasks/{id}/start", s.handleStartTask)
+		r.Post("/tasks/{id}/pause", s.handlePauseTask)
 		r.Post("/tasks/{id}/complete", s.handleCompleteTask)
 		r.Delete("/tasks/{id}", s.handleDeleteTask)
 		r.Post("/tasks/{id}/restore", s.handleRestoreTask)
@@ -610,16 +612,18 @@ func (s *Server) handleListTasks(w http.ResponseWriter, r *http.Request) {
 	endToday := startToday.AddDate(0, 0, 1).Add(-time.Millisecond)
 	switch q.Get("view") {
 	case "inbox":
-		f.Status, f.Inbox, f.Order = "open", true, "manual"
+		f.Status, f.Inbox, f.Order = "active", true, "manual"
 	case "today":
-		f.Status, f.DueTo = "open", &endToday
+		f.Status, f.DueTo = "active", &endToday
 	case "upcoming":
 		from, to := endToday.Add(time.Millisecond), endToday.AddDate(0, 0, 14)
-		f.Status, f.DueFrom, f.DueTo = "open", &from, &to
+		f.Status, f.DueFrom, f.DueTo = "active", &from, &to
 	case "overdue":
-		f.Status, f.Overdue = "open", true
+		f.Status, f.Overdue = "active", true
 	case "next":
-		f.Status = "open"
+		f.Status = "active"
+	case "in_progress":
+		f.Status = "in_progress"
 	case "done":
 		f.Status = "done"
 	case "trash":
@@ -646,6 +650,32 @@ func (s *Server) handleListTasks(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"tasks": tasks})
+}
+
+func (s *Server) handleStartTask(w http.ResponseWriter, r *http.Request) {
+	s.handleTaskStatus(w, r, "in_progress")
+}
+
+func (s *Server) handlePauseTask(w http.ResponseWriter, r *http.Request) {
+	s.handleTaskStatus(w, r, "open")
+}
+
+func (s *Server) handleTaskStatus(w http.ResponseWriter, r *http.Request, status string) {
+	tc := tenant.MustFrom(r.Context())
+	t, err := s.Store.SetTaskStatus(r.Context(), tc, chi.URLParam(r, "id"), status)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "not_found", "task not found")
+			return
+		}
+		writeError(w, http.StatusConflict, "invalid_transition", err.Error())
+		return
+	}
+	if s.Hub != nil {
+		s.Hub.Publish(events.Event{Kind: events.KindTaskUpdated, TenantID: tc.TenantID, UserID: tc.UserID,
+			Payload: map[string]any{"id": t.ID, "title": t.Title, "status": t.Status}})
+	}
+	writeJSON(w, http.StatusOK, t)
 }
 
 func (s *Server) handleGetTask(w http.ResponseWriter, r *http.Request) {

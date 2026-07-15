@@ -112,6 +112,30 @@ func TestTaskAPIRequiresAuthentication(t *testing.T) {
 	}
 }
 
+func TestTaskProgressAPI(t *testing.T) {
+	f := newAPIFixture(t)
+	created := f.request(t, http.MethodPost, "/api/v1/tasks", map[string]any{"title": "progress task"})
+	var task struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(created.Body.Bytes(), &task); err != nil {
+		t.Fatal(err)
+	}
+
+	started := f.request(t, http.MethodPost, "/api/v1/tasks/"+task.ID+"/start", nil)
+	if started.Code != http.StatusOK || !bytes.Contains(started.Body.Bytes(), []byte(`"status":"in_progress"`)) || !bytes.Contains(started.Body.Bytes(), []byte(`"started_at"`)) {
+		t.Fatalf("start status=%d body=%s", started.Code, started.Body.String())
+	}
+	today := f.request(t, http.MethodGet, "/api/v1/tasks?view=today", nil)
+	if today.Code != http.StatusOK || !bytes.Contains(today.Body.Bytes(), []byte(task.ID)) {
+		t.Fatalf("in-progress task missing from today: %s", today.Body.String())
+	}
+	paused := f.request(t, http.MethodPost, "/api/v1/tasks/"+task.ID+"/pause", nil)
+	if paused.Code != http.StatusOK || !bytes.Contains(paused.Body.Bytes(), []byte(`"status":"open"`)) {
+		t.Fatalf("pause status=%d body=%s", paused.Code, paused.Body.String())
+	}
+}
+
 func TestProductivityTrendAPIIsBounded(t *testing.T) {
 	f := newAPIFixture(t)
 	response := f.request(t, http.MethodGet, "/api/v1/analytics/productivity?days=7&tz=UTC", nil)

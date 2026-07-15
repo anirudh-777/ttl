@@ -54,6 +54,7 @@ The CLI's MCP transport auto-injects the API key from `~/.config/ttl/config.json
 | `show_task` | Full task by id |
 | `search_tasks` | Free-text + tag search |
 | `complete_task` | Mark done (spawns next occurrence if recurring) |
+| `start_task`, `pause_task` | Move tasks between open and in progress |
 | `delete_task`, `restore_task`, `purge_task` | Trash, recover, or permanently remove tasks |
 | `update_task`, `reorder_task` | Edit and organize tasks and subtasks |
 | `add_subtask`, `list_subtasks` | Manage task hierarchy |
@@ -87,6 +88,8 @@ ttl list --overdue --format ndjson
 ttl show <id-or-prefix>
 ttl edit <id> --title "..." --priority 2 --due 2026-07-01
 ttl done <id>            # next occurrence shown automatically if recurring
+ttl progress <id>        # mark in progress
+ttl pause <id>           # move back to open
 
 # Time tracking
 ttl start <task-id>

@@ -231,7 +231,7 @@ func (s *Store) MergeTag(ctx context.Context, tc *tenant.Context, sourceID, targ
 
 // TaskFilter narrows a task listing.
 type TaskFilter struct {
-	Status    string // "" | "open" | "done"
+	Status    string // "" | "open" | "in_progress" | "done" | "active"
 	ProjectID string // "" for any
 	TagID     string
 	ParentID  *string // nil for any, set pointer for "root only" or specific
@@ -389,11 +389,14 @@ func (s *Store) UpdateTask(ctx context.Context, tc *tenant.Context, id string, f
 		}
 		fields["title"] = strings.TrimSpace(v)
 	}
+	var nextStatus string
 	if raw, ok := fields["status"]; ok {
 		v, ok := raw.(string)
-		if !ok || (v != "open" && v != "done") {
-			return nil, errors.New("status must be open or done")
+		if !ok || (v != "open" && v != "in_progress") {
+			return nil, errors.New("status must be open or in_progress; use the complete endpoint to mark done")
 		}
+		nextStatus = v
+		delete(fields, "status")
 	}
 	if raw, ok := fields["priority"]; ok {
 		v, err := integerField(raw, "priority")
@@ -438,6 +441,42 @@ func (s *Store) UpdateTask(ctx context.Context, tc *tenant.Context, id string, f
 		if err := s.replaceTaskTags(ctx, tc, id, tags); err != nil {
 			return nil, err
 		}
+	}
+	if nextStatus != "" {
+		return s.SetTaskStatus(ctx, tc, id, nextStatus)
+	}
+	return s.GetTask(ctx, tc, id)
+}
+
+// SetTaskStatus transitions an unfinished task between open and in_progress.
+// Completion remains a dedicated operation because it also handles recurrence.
+func (s *Store) SetTaskStatus(ctx context.Context, tc *tenant.Context, id, status string) (*model.Task, error) {
+	if status != "open" && status != "in_progress" {
+		return nil, errors.New("status must be open or in_progress")
+	}
+	now := time.Now().UnixMilli()
+	var res sql.Result
+	var err error
+	if status == "in_progress" {
+		res, err = s.DB.ExecContext(ctx, `UPDATE tasks
+			SET status='in_progress', started_at=COALESCE(started_at, ?), updated_at=?
+			WHERE id=? AND tenant_id=? AND deleted_at IS NULL AND status='open'`, now, now, id, tc.TenantID)
+	} else {
+		res, err = s.DB.ExecContext(ctx, `UPDATE tasks SET status='open', updated_at=?
+			WHERE id=? AND tenant_id=? AND deleted_at IS NULL AND status='in_progress'`, now, id, tc.TenantID)
+	}
+	if err != nil {
+		return nil, err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		current, getErr := s.GetTask(ctx, tc, id)
+		if getErr != nil {
+			return nil, getErr
+		}
+		if current.Status == status {
+			return current, nil
+		}
+		return nil, fmt.Errorf("invalid transition to %s", status)
 	}
 	return s.GetTask(ctx, tc, id)
 }
@@ -561,7 +600,9 @@ func (s *Store) ListTasks(ctx context.Context, tc *tenant.Context, f TaskFilter,
 	if f.Inbox {
 		conds = append(conds, "project_id IS NULL", "parent_id IS NULL")
 	}
-	if f.Status != "" {
+	if f.Status == "active" {
+		conds = append(conds, "status IN ('open', 'in_progress')")
+	} else if f.Status != "" {
 		conds = append(conds, "status = ?")
 		args = append(args, f.Status)
 	}
@@ -583,7 +624,7 @@ func (s *Store) ListTasks(ctx context.Context, tc *tenant.Context, f TaskFilter,
 		args = append(args, like, like)
 	}
 	if f.Overdue {
-		conds = append(conds, "due_at IS NOT NULL AND due_at < ? AND status = 'open'")
+		conds = append(conds, "due_at IS NOT NULL AND due_at < ? AND status != 'done'")
 		args = append(args, time.Now().UnixMilli())
 	}
 	if f.DueFrom != nil {
@@ -682,7 +723,7 @@ func (s *Store) Subtasks(ctx context.Context, tc *tenant.Context, parentID strin
 const taskSelect = `
 SELECT id, tenant_id, project_id, parent_id, title, notes,
        status, priority, due_at, recurrence_rrule,
-       created_by, created_at, updated_at, completed_at, deleted_at, position
+       created_by, created_at, updated_at, started_at, completed_at, deleted_at, position
 FROM tasks `
 
 type rowScanner interface {
@@ -700,14 +741,14 @@ func (s *Store) scanOneTask(ctx context.Context, r rowScanner) (*model.Task, err
 func (s *Store) scanTask(r rowScanner) (*model.Task, error) {
 	var t model.Task
 	var projectID, parentID sql.NullString
-	var dueAt, completedAt, deletedAt sql.NullInt64
+	var dueAt, startedAt, completedAt, deletedAt sql.NullInt64
 	var recurrence sql.NullString
 	var createdAt, updatedAt int64
 	if err := r.Scan(
 		&t.ID, &t.TenantID, &projectID, &parentID,
 		&t.Title, &t.Notes, &t.Status, &t.Priority,
 		&dueAt, &recurrence,
-		&t.CreatedBy, &createdAt, &updatedAt, &completedAt, &deletedAt, &t.Position,
+		&t.CreatedBy, &createdAt, &updatedAt, &startedAt, &completedAt, &deletedAt, &t.Position,
 	); err != nil {
 		return nil, err
 	}
@@ -726,6 +767,10 @@ func (s *Store) scanTask(r rowScanner) (*model.Task, error) {
 	if completedAt.Valid {
 		v := time.UnixMilli(completedAt.Int64)
 		t.CompletedAt = &v
+	}
+	if startedAt.Valid {
+		v := time.UnixMilli(startedAt.Int64)
+		t.StartedAt = &v
 	}
 	if deletedAt.Valid {
 		v := time.UnixMilli(deletedAt.Int64)

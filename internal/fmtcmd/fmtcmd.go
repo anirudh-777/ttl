@@ -193,6 +193,8 @@ func printTasksTable(w io.Writer, tasks []model.Task) error {
 		status := ""
 		if t.Status == "done" {
 			status = "[x] "
+		} else if t.Status == "in_progress" {
+			status = "[>] "
 		} else {
 			status = "[ ] "
 		}
@@ -207,6 +209,8 @@ func taskOneLine(t *model.Task) string {
 	mark := "[ ]"
 	if t.Status == "done" {
 		mark = "[x]"
+	} else if t.Status == "in_progress" {
+		mark = "[>]"
 	}
 	due := ""
 	if t.DueAt != nil {

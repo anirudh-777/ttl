@@ -79,11 +79,13 @@ DELETE /api/v1/tags/{id}
 ### Tasks
 
 ```
-GET    /api/v1/tasks?status=open|done&project_id=&tag_id=&q=&overdue=1&parent_id=root&limit=200
+GET    /api/v1/tasks?status=active|open|in_progress|done&project_id=&tag_id=&q=&overdue=1&parent_id=root&limit=200
 POST   /api/v1/tasks      { title, notes, priority, project_id, parent_id,
                             due_at (unix ms), recurrence_rrule, tags[] }
 GET    /api/v1/tasks/{id}
 PATCH  /api/v1/tasks/{id} { any of the above fields }
+POST   /api/v1/tasks/{id}/start
+POST   /api/v1/tasks/{id}/pause
 POST   /api/v1/tasks/{id}/complete
 DELETE /api/v1/tasks/{id}
 POST   /api/v1/tasks/{id}/restore
@@ -92,7 +94,7 @@ POST   /api/v1/tasks/{id}/reorder { project_id?, parent_id?, before_id?, after_i
 ```
 
 `DELETE /tasks/{id}` moves a task subtree to recoverable trash. List smart
-views with `?view=inbox|today|upcoming|overdue|next|done|trash`.
+views with `?view=inbox|today|upcoming|overdue|next|in_progress|done|trash`.
 
 `complete` returns `{ task, next_occurred }`; `next_occurred` is set
 when the completed task had a `recurrence_rrule` and the next

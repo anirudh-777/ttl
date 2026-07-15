@@ -104,7 +104,7 @@ standalone app. Task and account data are never stored in the offline cache.
 
 | Surface | Try |
 |---|---|
-| CLI | `ttl add`, `ttl list`, `ttl done`, `ttl start`, `ttl stop`, `ttl log`, `ttl pomodoro` |
+| CLI | `ttl add`, `ttl list`, `ttl progress`, `ttl pause`, `ttl done`, `ttl start`, `ttl stop`, `ttl log`, `ttl pomodoro` |
 | TUI | `ttl view <inbox|today|upcoming|overdue|next|done|trash>` — vim-style keys |
 | Web | <http://localhost:8093/today> — installable PWA, Today insights, focus controls, smart views, projects, team and keys |
 | API | `curl -H "X-API-Key: ttk_..." http://localhost:8093/api/v1/tasks` |

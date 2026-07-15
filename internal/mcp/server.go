@@ -204,6 +204,8 @@ func allTools() []map[string]any {
 				"tags": propStrings("Replacement tag names."), "recurrence": propStr("Preset, rrule:<rule>, or none."),
 			}, []string{"id"}),
 		},
+		{"name": "start_task", "description": "Mark an open task as in progress.", "inputSchema": obj(map[string]any{"id": propStr("Task id or short prefix.")}, []string{"id"})},
+		{"name": "pause_task", "description": "Move an in-progress task back to open.", "inputSchema": obj(map[string]any{"id": propStr("Task id or short prefix.")}, []string{"id"})},
 		{
 			"name": "add_subtask", "description": "Create a subtask under an existing task.",
 			"inputSchema": obj(map[string]any{"parent_id": propStr("Parent task id."), "title": propStr("Subtask title."), "notes": propStr("Optional notes."), "priority": propInt("Priority.", 0, 3)}, []string{"parent_id", "title"}),
@@ -211,12 +213,12 @@ func allTools() []map[string]any {
 		{"name": "list_subtasks", "description": "List direct subtasks of a task.", "inputSchema": obj(map[string]any{"parent_id": propStr("Parent task id.")}, []string{"parent_id"})},
 		{
 			"name":        "list_tasks",
-			"description": "List tasks. Default: open. Use status='all' to include done.",
+			"description": "List tasks. Default: all unfinished. Use status='all' to include done.",
 			"inputSchema": obj(map[string]any{
-				"status":  propStr("open | done | all"),
+				"status":  propStr("active | open | in_progress | done | all"),
 				"project": propStr("Project name filter."),
 				"search":  propStr("Substring search across title and notes."),
-				"view":    propStr("inbox | today | upcoming | overdue | next | done | trash"),
+				"view":    propStr("inbox | today | upcoming | overdue | next | in_progress | done | trash"),
 				"overdue": propBool("Only return overdue open tasks."),
 				"limit":   propInt("Max results (default 50).", 1, 1000),
 			}, nil),
@@ -513,8 +515,12 @@ func (s *server) invoke(ctx context.Context, name string, args map[string]any) (
 	case "list_tasks":
 		opts := client.ListOpts{Limit: 50}
 		switch strings.ToLower(get("status")) {
-		case "open", "":
+		case "active", "":
+			opts.Status = "active"
+		case "open":
 			opts.Status = "open"
+		case "in_progress":
+			opts.Status = "in_progress"
 		case "done":
 			opts.Status = "done"
 		case "all":
@@ -540,6 +546,22 @@ func (s *server) invoke(ctx context.Context, name string, args map[string]any) (
 			return "", err
 		}
 		return jsonOrText(tasks), nil
+
+	case "start_task", "pause_task":
+		id, err := s.resolveTaskID(ctx, get("id"), false)
+		if err != nil {
+			return "", err
+		}
+		var t any
+		if name == "start_task" {
+			t, err = s.client.StartTask(ctx, id)
+		} else {
+			t, err = s.client.PauseTask(ctx, id)
+		}
+		if err != nil {
+			return "", err
+		}
+		return jsonOrText(t), nil
 
 	case "show_task":
 		id, err := s.resolveTaskID(ctx, get("id"), false)

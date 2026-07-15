@@ -95,16 +95,20 @@
     // Layout: [checkbox] [pri] [title + meta] [del]
     // Title and meta share a column that wraps on narrow screens.
     const deleted = !!t.deleted_at;
+    const status = t.status === 'in_progress' ? '<span class="status-progress">in progress</span>' : '';
+    const progressAction = t.status === 'open'
+      ? '<button class="secondary small" data-act="start-task">start</button>'
+      : (t.status === 'in_progress' ? '<button class="secondary small" data-act="pause-task">pause</button>' : '');
     const actions = deleted
       ? '<button class="secondary small" data-act="restore">restore</button><button class="del" data-act="purge" title="permanently delete">purge</button>'
-      : '<button class="del" data-act="del" title="move to trash">x</button>';
+      : progressAction + '<button class="del" data-act="del" title="move to trash">x</button>';
     return `
       <li data-id="${t.id}">
-        ${deleted ? '' : `<input type="checkbox" ${t.status === 'done' ? 'checked' : ''} data-act="toggle">`}
+        ${deleted ? '' : `<input type="checkbox" ${t.status === 'done' ? 'checked disabled' : ''} data-act="toggle">`}
         <span class="pri">${priLabel(t.priority)}</span>
         <div class="body">
           <button class="task-title-button ${cls}" data-act="edit">${escapeHTML(t.title)}</button>
-          <span class="meta">${timing} ${tags}</span>
+          <span class="meta">${status} ${timing} ${tags}</span>
         </div>
         ${actions}
       </li>`;
@@ -177,13 +181,14 @@
     const total = '<div class="muted">Total tracked: <b>' + fmtDur(sum.total_ms || 0) + '</b></div>';
     let focusHTML = '';
     if (!active) {
-      focusHTML = '<form class="focus-controls" id="pomodoro-form">' +
-        '<b>Start a focus session</b>' +
+      focusHTML = '<form class="focus-controls" id="timer-form">' +
+        '<b>Start tracking</b>' +
         '<select name="task_id" aria-label="Task"><option value="">General focus</option>' +
         (openTasks || []).map((t) => '<option value="' + t.id + '">' + escapeHTML(t.title) + '</option>').join('') +
         '</select>' +
-        '<select name="minutes" aria-label="Duration"><option value="25">25 min</option><option value="50">50 min</option></select>' +
-        '<button type="submit">Start Pomodoro</button></form>';
+        '<select name="kind" aria-label="Timer type"><option value="work">Work timer</option><option value="pomodoro">Pomodoro</option></select>' +
+        '<select name="minutes" aria-label="Duration" disabled><option value="25">25 min</option><option value="50">50 min</option></select>' +
+        '<button type="submit">Start</button></form>';
     }
     return activeHTML + focusHTML + total + perTaskHTML;
   }
@@ -199,14 +204,19 @@
         } catch (e) { alert(e.message); }
       });
     }
-    const pomodoro = root.querySelector('#pomodoro-form');
-    if (pomodoro) {
-      pomodoro.addEventListener('submit', async (e) => {
+    const timerForm = root.querySelector('#timer-form');
+    if (timerForm) {
+      timerForm.elements.kind.addEventListener('change', () => {
+        timerForm.elements.minutes.disabled = timerForm.elements.kind.value !== 'pomodoro';
+      });
+      timerForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const taskID = e.target.elements.task_id.value;
-        const minutes = Number(e.target.elements.minutes.value);
+        const kind = e.target.elements.kind.value;
+        const body = { task_id: taskID, kind };
+        if (kind === 'pomodoro') body.minutes = Number(e.target.elements.minutes.value);
         try {
-          await api('POST', '/api/v1/timer/start', { task_id: taskID, kind: 'pomodoro', minutes });
+          await api('POST', '/api/v1/timer/start', body);
           await boot();
         } catch (err) { alert(err.message); }
       });
@@ -233,6 +243,15 @@
           await api('POST', '/api/v1/tasks/' + id + '/complete');
           await boot();
         } catch (err) { alert(err.message); }
+      });
+    });
+    $$('button[data-act="start-task"], button[data-act="pause-task"]', root).forEach((b) => {
+      b.addEventListener('click', async (e) => {
+        const button = e.currentTarget;
+        const id = button.closest('li').dataset.id;
+        const action = button.dataset.act === 'start-task' ? 'start' : 'pause';
+        try { await api('POST', '/api/v1/tasks/' + id + '/' + action); await boot(); }
+        catch (err) { alert(err.message); }
       });
     });
     $$('button[data-act="del"]', root).forEach((b) => {
@@ -429,6 +448,8 @@
       await renderMain(main, 'Upcoming', { view: 'upcoming', limit: '500' }); highlightNav('upcoming');
     } else if (path.startsWith('/next')) {
       await renderMain(main, 'Next', { view: 'next', limit: '50' }); highlightNav('next');
+    } else if (path.startsWith('/in-progress')) {
+      await renderMain(main, 'In Progress', { view: 'in_progress', limit: '500' }); highlightNav('in-progress');
     } else if (path.startsWith('/done')) {
       await renderMain(main, 'Done', { view: 'done', limit: '500' }); highlightNav('done');
     } else if (path.startsWith('/trash')) {

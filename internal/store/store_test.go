@@ -146,6 +146,44 @@ func TestTaskCRUD(t *testing.T) {
 	}
 }
 
+func TestTaskProgressTransitionsAndActiveFilter(t *testing.T) {
+	d := openTestDB(t)
+	st := store.New(d)
+	ctx := context.Background()
+	u := signup(t, d, "progress@test.local", "Progress")
+	tc := &tenant.Context{TenantID: u.TenantID, UserID: u.ID, Role: u.Role}
+
+	task, err := st.CreateTask(ctx, tc, mkTask("ship progress tracking"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	started, err := st.SetTaskStatus(ctx, tc, task.ID, "in_progress")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if started.Status != "in_progress" || started.StartedAt == nil {
+		t.Fatalf("started task=%+v", started)
+	}
+	if _, err := st.SetTaskStatus(ctx, tc, task.ID, "in_progress"); err != nil {
+		t.Fatalf("repeated start should be idempotent: %v", err)
+	}
+	active, err := st.ListTasks(ctx, tc, store.TaskFilter{Status: "active"}, 10)
+	if err != nil || len(active) != 1 || active[0].ID != task.ID {
+		t.Fatalf("active=%+v err=%v", active, err)
+	}
+	open, err := st.ListTasks(ctx, tc, store.TaskFilter{Status: "open"}, 10)
+	if err != nil || len(open) != 0 {
+		t.Fatalf("open=%+v err=%v", open, err)
+	}
+	paused, err := st.SetTaskStatus(ctx, tc, task.ID, "open")
+	if err != nil || paused.Status != "open" || paused.StartedAt == nil {
+		t.Fatalf("paused=%+v err=%v", paused, err)
+	}
+	if _, err := st.SetTaskStatus(ctx, tc, task.ID, "done"); err == nil {
+		t.Fatal("expected done transition to require completion path")
+	}
+}
+
 func TestTaskTrashRestoreAndPurge(t *testing.T) {
 	d := openTestDB(t)
 	st := store.New(d)

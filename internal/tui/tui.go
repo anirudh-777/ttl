@@ -39,6 +39,7 @@ const (
 	ViewUpcoming View = "upcoming"
 	ViewOverdue  View = "overdue"
 	ViewNext     View = "next"
+	ViewProgress View = "in_progress"
 	ViewDone     View = "done"
 	ViewTrash    View = "trash"
 )
@@ -54,18 +55,22 @@ func Run(c *client.Client, view View) error {
 // -------------------------- item --------------------------
 
 type tuiItem struct {
-	id       string
-	title    string
-	priority int
-	due      *time.Time
-	tags     []string
-	done     bool
-	deleted  bool
+	id         string
+	title      string
+	priority   int
+	due        *time.Time
+	tags       []string
+	done       bool
+	inProgress bool
+	deleted    bool
 }
 
 func (i tuiItem) Title() string {
 	if i.done {
 		return "[x] " + i.title
+	}
+	if i.inProgress {
+		return "[>] " + i.title
 	}
 	return "[ ] " + i.title
 }
@@ -174,6 +179,14 @@ func (m *tuiModel) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.status = "saving..."
 				return m, m.completeTaskCmd(it.id)
 			}
+		case "p":
+			if it, ok := m.list.SelectedItem().(tuiItem); ok && !it.done && !it.deleted {
+				m.status = "saving..."
+				if it.inProgress {
+					return m, m.pauseTaskCmd(it.id)
+				}
+				return m, m.startTaskCmd(it.id)
+			}
 		case "d":
 			if _, ok := m.list.SelectedItem().(tuiItem); ok {
 				m.mode = modeConfirmDelete
@@ -184,8 +197,8 @@ func (m *tuiModel) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.refresh()
 			m.status = "refreshed"
 			return m, nil
-		case "1", "2", "3", "4", "5", "6", "7":
-			views := map[string]View{"1": ViewInbox, "2": ViewToday, "3": ViewUpcoming, "4": ViewOverdue, "5": ViewNext, "6": ViewDone, "7": ViewTrash}
+		case "1", "2", "3", "4", "5", "6", "7", "8":
+			views := map[string]View{"1": ViewInbox, "2": ViewToday, "3": ViewUpcoming, "4": ViewOverdue, "5": ViewNext, "6": ViewProgress, "7": ViewDone, "8": ViewTrash}
 			m.view = views[msg.String()]
 			m.list.Title = string(m.view)
 			m.refresh()
@@ -316,13 +329,14 @@ func (m *tuiModel) refresh() {
 	items := make([]list.Item, 0, len(tasks))
 	for _, t := range tasks {
 		items = append(items, tuiItem{
-			id:       t.ID,
-			title:    t.Title,
-			priority: t.Priority,
-			due:      t.DueAt,
-			tags:     t.Tags,
-			deleted:  t.DeletedAt != nil,
-			done:     t.Status == "done",
+			id:         t.ID,
+			title:      t.Title,
+			priority:   t.Priority,
+			due:        t.DueAt,
+			tags:       t.Tags,
+			deleted:    t.DeletedAt != nil,
+			done:       t.Status == "done",
+			inProgress: t.Status == "in_progress",
 		})
 	}
 	m.list.SetItems(items)
@@ -331,6 +345,14 @@ func (m *tuiModel) refresh() {
 
 func (m *tuiModel) completeTaskCmd(id string) tea.Cmd {
 	return func() tea.Msg { _, err := m.c.CompleteTask(context.Background(), id); return taskMutationMsg{err: err} }
+}
+
+func (m *tuiModel) startTaskCmd(id string) tea.Cmd {
+	return func() tea.Msg { _, err := m.c.StartTask(context.Background(), id); return taskMutationMsg{err: err} }
+}
+
+func (m *tuiModel) pauseTaskCmd(id string) tea.Cmd {
+	return func() tea.Msg { _, err := m.c.PauseTask(context.Background(), id); return taskMutationMsg{err: err} }
 }
 
 func (m *tuiModel) deleteTaskCmd(id string) tea.Cmd {
